@@ -61,6 +61,19 @@ def init() -> None:
 
 
 @app.command()
+def doctor() -> None:
+    """Check ffmpeg, transcription, Instagram login, folders. Fix hints for each."""
+    from prism import doctor as doctor_mod
+
+    checks = doctor_mod.run()
+    for c in checks:
+        typer.echo(f"  {'ok ' if c.ok else 'FIX'}  {c.name:<16}{c.detail}")
+    if not all(c.ok for c in checks):
+        raise typer.Exit(1)
+    typer.echo("All good.")
+
+
+@app.command()
 def fetch(
     file: Annotated[
         Path,
