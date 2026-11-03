@@ -2,6 +2,8 @@
 name = "prism"
 version = "0.1.0"
 description = "Turn saved Instagram reels into categorized ideas, locally, with your own AI agent"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "faster-whisper>=1.1 ; platform_machine != 'arm64' or sys_platform != 'darwin'",
