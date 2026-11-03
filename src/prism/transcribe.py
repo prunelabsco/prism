@@ -1,10 +1,17 @@
-"""Video -> transcript.json via whisper. Rules in docs/PIPELINE.md."""
+"""Video -> transcript.json via whisper."""
 
+import functools
+import importlib.util
 import json
 import subprocess
 from pathlib import Path
 
 from prism.config import settings
+
+MODELS = {
+    "mlx": "mlx-community/whisper-large-v3-turbo",
+    "faster-whisper": "large-v3-turbo",
+}
 
 # segments with a "no speech" probability this high are dropped (whisper default)
 NO_SPEECH_PROB = 0.6
@@ -41,12 +48,40 @@ def duration(video: Path) -> float:
         raise TranscribeError(f"ffprobe duration failed: {e}") from e
 
 
-def _whisper(video: Path) -> dict:
-    import mlx_whisper  # heavy, only loaded when something needs transcribing
+def backend() -> str:
+    """mlx-whisper on Apple Silicon, faster-whisper elsewhere (pyproject picks one)."""
+    return "mlx" if importlib.util.find_spec("mlx_whisper") else "faster-whisper"
 
-    return mlx_whisper.transcribe(
-        str(video), path_or_hf_repo=settings.transcribe.model, language=None
-    )
+
+def model_name() -> str:
+    return settings.transcribe.model or MODELS[backend()]
+
+
+@functools.cache
+def _faster_model(name: str):
+    from faster_whisper import WhisperModel
+
+    # auto: CUDA if present, else CPU with the fastest compute type it supports
+    return WhisperModel(name, device="auto", compute_type="auto")
+
+
+def _whisper(video: Path) -> dict:
+    # heavy imports, only loaded when something needs transcribing
+    if backend() == "mlx":
+        import mlx_whisper
+
+        return mlx_whisper.transcribe(
+            str(video), path_or_hf_repo=model_name(), language=None
+        )
+    segments, info = _faster_model(model_name()).transcribe(str(video))
+    return {
+        "language": info.language,
+        "segments": [
+            {"start": s.start, "end": s.end, "text": s.text,
+             "no_speech_prob": s.no_speech_prob}
+            for s in segments
+        ],
+    }  # fmt: skip
 
 
 def is_complete(out_dir: Path) -> bool:

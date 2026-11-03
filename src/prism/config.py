@@ -62,7 +62,7 @@ class Frames(_Section):
 
 
 class Transcribe(_Section):
-    model: str = "mlx-community/whisper-large-v3-turbo"
+    model: str | None = None  # None = the backend's default (transcribe.MODELS)
 
 
 class Curate(_Section):
