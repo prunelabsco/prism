@@ -73,7 +73,16 @@ def _whisper(video: Path) -> dict:
         return mlx_whisper.transcribe(
             str(video), path_or_hf_repo=model_name(), language=None
         )
-    segments, info = _faster_model(model_name()).transcribe(str(video))
+    import numpy as np
+
+    # decode with ffmpeg ourselves: faster-whisper's PyAV path breaks on av>=19
+    pcm = subprocess.run(
+        ["ffmpeg", "-nostdin", "-loglevel", "error", "-i", str(video),
+         "-f", "s16le", "-ac", "1", "-ar", "16000", "-"],
+        capture_output=True, check=True,
+    ).stdout  # fmt: skip
+    audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
+    segments, info = _faster_model(model_name()).transcribe(audio)
     return {
         "language": info.language,
         "segments": [
