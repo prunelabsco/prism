@@ -49,6 +49,9 @@ def init() -> None:
         config.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         config.CONFIG_FILE.write_text(config.TEMPLATE, encoding="utf-8")
         typer.echo(f"Config template: {config.CONFIG_FILE}")
+    if not config.PROFILE_FILE.exists():
+        config.PROFILE_FILE.write_text(config.PROFILE_TEMPLATE, encoding="utf-8")
+        typer.echo(f"Profile template: {config.PROFILE_FILE}")
     conn = db.connect(s.db_path)
     before = conn.execute("PRAGMA user_version").fetchone()[0]
     after = db.migrate(conn)

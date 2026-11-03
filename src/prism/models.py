@@ -1,4 +1,4 @@
-"""curation.json schema (rules in docs/CURATION.md). Validated by `prism commit`."""
+"""curation.json schema (rules in skills/prism/references/curation.md). Validated by `prism commit`."""
 
 from typing import Annotated, Literal
 

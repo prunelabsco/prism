@@ -14,6 +14,7 @@ def settings(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(config, "settings", s)
     monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "config.toml")
+    monkeypatch.setattr(config, "PROFILE_FILE", tmp_path / "profile.md")
     return s
 
 

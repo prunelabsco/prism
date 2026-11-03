@@ -12,6 +12,19 @@ from pydantic import BaseModel, ConfigDict
 
 HOME = Path(os.environ.get("PRISM_HOME", "~/.prism")).expanduser()
 CONFIG_FILE = HOME / "config.toml"
+# who the user is: read by the agent while curating, so ideas fit them
+PROFILE_FILE = HOME / "profile.md"
+
+PROFILE_TEMPLATE = """\
+# About me
+
+<!-- prism: the curating agent reads this to judge what is useful to you.
+Replace the lines below with a few honest sentences. -->
+
+- What I do:
+- What I save reels for:
+- What I want out of them (try, buy, cook, build, visit...):
+"""
 
 TEMPLATE = """\
 # Prism config. Every key is optional; uncomment to override the default.

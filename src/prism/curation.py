@@ -1,4 +1,4 @@
-"""Curation desk: `next` hands out a packet, `commit` stores the result. Rules in docs/CURATION.md."""
+"""Curation desk: `next` hands out a packet, `commit` stores the result. Rules in skills/prism/references/curation.md."""
 
 import json
 import sqlite3
