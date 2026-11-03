@@ -1,4 +1,4 @@
--- Initial schema, see docs/DATA.md
+-- Initial schema
 
 CREATE TABLE reels (
   id            TEXT PRIMARY KEY,

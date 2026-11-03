@@ -1,4 +1,4 @@
-"""Video -> frames at scene changes + frames.json. Rules in docs/PIPELINE.md."""
+"""Video -> frames at scene changes + frames.json."""
 
 import json
 import re

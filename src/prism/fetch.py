@@ -1,4 +1,4 @@
-"""Source -> queue: normalize URLs, dedup, probe posts, insert reels. Rules in docs/PIPELINE.md."""
+"""Source -> queue: normalize URLs, dedup, probe posts, insert reels."""
 
 import json
 import logging

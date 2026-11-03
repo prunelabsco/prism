@@ -1,4 +1,4 @@
-"""Build packet.json: the only thing the agent reads while curating. Schema in docs/PIPELINE.md."""
+"""Build packet.json: the only thing the agent reads while curating."""
 
 import json
 import sqlite3

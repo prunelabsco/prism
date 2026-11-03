@@ -1,4 +1,4 @@
-"""SQLite connection, migrations, transition(), log_event(). Rules in docs/DATA.md."""
+"""SQLite connection, migrations, transition(), log_event()."""
 
 import json
 import sqlite3

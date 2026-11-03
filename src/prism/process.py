@@ -1,4 +1,4 @@
-"""Queue -> download, frames, transcript, packet -> ready. Rules in docs/PIPELINE.md."""
+"""Queue -> download, frames, transcript, packet -> ready."""
 
 import logging
 import sqlite3

@@ -1,4 +1,4 @@
-"""`curated` reels -> Markdown notes in output_dir. Template & no-overwrite rules in docs/OUTPUT.md."""
+"""`curated` reels -> Markdown notes in output_dir."""
 
 import hashlib
 import json
