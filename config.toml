@@ -1,0 +1,25 @@
+[paths]
+data_dir = "data"
+nexus_inbox = "~/Documents/Nexus/00-Inbox/Prism"
+
+[download]
+max_per_run = 30
+throttle_min_s = 3
+throttle_max_s = 8
+max_height = 720            # sisi terpendek video (format_sort res:720)
+keep_video = false
+browser = "brave"           # browser yang login Instagram (nama browser yt-dlp)
+browser_profile = "Default"  # nama folder profil (~/Library/Application Support/BraveSoftware/Brave-Browser)
+
+[frames]
+scene_threshold = 0.30
+max_frames = 12
+dense_max_frames = 20
+width = 768
+max_gap_s = 5               # celah antar frame lebih dari ini diisi (reel slide transisi halus)
+
+[transcribe]
+model = "mlx-community/whisper-large-v3-turbo"
+
+[curate]
+default_batch = 5

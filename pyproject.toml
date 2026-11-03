@@ -1,0 +1,27 @@
+[project]
+name = "prism"
+version = "0.1.0"
+description = "Kurasi reels tersimpan jadi ide berkategori (lab Spectra)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "mlx-whisper>=0.4.3",
+    "pydantic>=2.14.1",
+    "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
+    "typer>=0.27.3",
+    "yt-dlp>=2026.8.19",
+]
+
+[project.scripts]
+prism = "prism.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
