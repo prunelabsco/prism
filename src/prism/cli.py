@@ -44,6 +44,10 @@ def init() -> None:
     existed = s.db_path.exists()
     for d in (s.reels_dir, s.logs_dir):
         d.mkdir(parents=True, exist_ok=True)
+    if not config.CONFIG_FILE.exists():
+        config.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        config.CONFIG_FILE.write_text(config.TEMPLATE, encoding="utf-8")
+        typer.echo(f"Config template: {config.CONFIG_FILE}")
     conn = db.connect(s.db_path)
     before = conn.execute("PRAGMA user_version").fetchone()[0]
     after = db.migrate(conn)
@@ -304,7 +308,7 @@ def sync() -> None:
     """Baca status catatan Nexus (baru/dipilih/dibuang) kembali ke database."""
     from prism import sync as sync_mod
 
-    r = sync_mod.run(_open(), config.settings.nexus_vault)
+    r = sync_mod.run(_open(), config.settings.vault_dir)
     typer.echo(
         f"{len(r.changed)} status berubah · {len(r.moved)} catatan dipindah"
         f" · {len(r.missing)} catatan tidak ketemu · {len(r.invalid)} status tidak valid"

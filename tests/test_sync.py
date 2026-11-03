@@ -19,7 +19,7 @@ def exported(conn, tmp_path, rid="ig_A"):
     p.write_text(f"---\nprism_id: {rid}\nstatus: baru\n---\nisi\n")
     with conn:
         conn.execute(
-            "INSERT INTO reels (id, source, source_id, url, status, nexus_path)"
+            "INSERT INTO reels (id, source, source_id, url, status, note_path)"
             " VALUES (?, 'mymind', ?, 'u', 'exported', ?)",
             (rid, rid, str(p)),
         )
@@ -56,7 +56,7 @@ def test_moved_note_found_by_prism_id(conn, tmp_path):
     )  # harus diabaikan
     r = sync.run(conn, vault)
     assert r.moved == ["ig_A"]
-    row = conn.execute("SELECT nexus_path FROM reels WHERE id = 'ig_A'").fetchone()
+    row = conn.execute("SELECT note_path FROM reels WHERE id = 'ig_A'").fetchone()
     assert row[0] == str(dest / "pindah.md")
 
 

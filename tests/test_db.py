@@ -29,7 +29,7 @@ def status(conn):
 
 
 def test_migrate_idempotent_and_seed(conn):
-    assert db.migrate(conn) == 2
+    assert db.migrate(conn) == 1
     slugs = [
         r[0] for r in conn.execute("SELECT slug FROM categories ORDER BY sort_order")
     ]

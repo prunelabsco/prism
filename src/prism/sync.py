@@ -40,15 +40,13 @@ def _index_vault(vault: Path) -> dict[str, Path]:
 
 def run(conn: sqlite3.Connection, vault: Path) -> SyncReport:
     r = SyncReport()
-    index = (
-        None  # scan vault mahal, hanya kalau ada catatan yang hilang dari nexus_path
-    )
+    index = None  # scan vault mahal, hanya kalau ada catatan yang hilang dari note_path
     rows = conn.execute(
-        "SELECT id, nexus_path, user_status FROM reels WHERE nexus_path IS NOT NULL"
+        "SELECT id, note_path, user_status FROM reels WHERE note_path IS NOT NULL"
         " ORDER BY id"
     ).fetchall()
     for reel in rows:
-        path = Path(reel["nexus_path"])
+        path = Path(reel["note_path"])
         if not path.is_file():
             index = _index_vault(vault) if index is None else index
             path = index.get(reel["id"])
@@ -57,7 +55,7 @@ def run(conn: sqlite3.Connection, vault: Path) -> SyncReport:
                 continue
             with conn:
                 conn.execute(
-                    "UPDATE reels SET nexus_path = ? WHERE id = ?",
+                    "UPDATE reels SET note_path = ? WHERE id = ?",
                     (str(path), reel["id"]),
                 )
             r.moved.append(reel["id"])

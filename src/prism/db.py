@@ -185,7 +185,7 @@ def picked_ideas(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Ide dari reel berstatus `dipilih`, urut kategori. Dasar `prism status --picked`."""
     return conn.execute(
         "SELECT COALESCE(c.name, 'perlu kategori') AS category, i.reel_id, i.title,"
-        " i.confidence, r.nexus_path FROM ideas i JOIN reels r ON r.id = i.reel_id"
+        " i.confidence, r.note_path FROM ideas i JOIN reels r ON r.id = i.reel_id"
         " LEFT JOIN categories c ON c.slug = i.category_slug"
         " WHERE r.user_status = 'dipilih'"
         " ORDER BY c.sort_order IS NULL, c.sort_order, c.name, i.reel_id, i.id"

@@ -71,7 +71,7 @@ def test_export_writes_template_and_marks_exported(conn, dirs):
     )
 
     row = conn.execute("SELECT * FROM reels WHERE id = 'ig_A'").fetchone()
-    assert (row["status"], row["nexus_path"]) == ("exported", str(p))
+    assert (row["status"], row["note_path"]) == ("exported", str(p))
     assert row["export_hash"] == export.sha256(p.read_bytes())
 
 

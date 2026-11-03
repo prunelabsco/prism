@@ -10,9 +10,10 @@ runner = CliRunner()
 @pytest.fixture
 def settings(tmp_path, monkeypatch):
     s = config.settings.model_copy(
-        update={"paths": config.Paths(data_dir=tmp_path / "data", nexus_inbox=tmp_path)}
+        update={"paths": config.Paths(data_dir=tmp_path / "data", output_dir=tmp_path)}
     )
     monkeypatch.setattr(config, "settings", s)
+    monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "config.toml")
     return s
 
 
@@ -28,7 +29,7 @@ def test_init_idempotent(settings):
     assert r.exit_code == 0 and "Database dibuat" in r.output
     assert settings.reels_dir.is_dir() and settings.logs_dir.is_dir()
     r = runner.invoke(app, ["init"])
-    assert r.exit_code == 0 and "Sudah di-init, skema v2" in r.output
+    assert r.exit_code == 0 and "Sudah di-init, skema v1" in r.output
 
 
 def test_status_counts_and_categories(settings):

@@ -168,7 +168,7 @@ def _gather(conn: sqlite3.Connection, reel: sqlite3.Row, reels_dir: Path):
 def _blocked(path: Path, reel: sqlite3.Row, inbox: Path) -> str | None:
     """Alasan catatan lama tidak boleh ditimpa, None kalau aman."""
     if not path.is_file():
-        return "file tidak ada di nexus_path (dipindah/dihapus?), jalankan `prism sync`"
+        return "file tidak ada di note_path (dipindah/dihapus?), jalankan `prism sync`"
     if path.parent != inbox:
         return "sudah dipindah keluar inbox"
     data = path.read_bytes()
@@ -186,7 +186,7 @@ def run(
     reels_dir: Path | None = None,
 ) -> ExportReport:
     """Idempoten: jalankan ulang tidak menimpa suntingan Rakha dan tidak menduplikasi file."""
-    inbox = inbox or config.settings.nexus_inbox
+    inbox = inbox or config.settings.output_dir
     reels_dir = reels_dir or config.settings.reels_dir
     inbox.mkdir(parents=True, exist_ok=True)
     r = ExportReport()
@@ -199,7 +199,7 @@ def run(
         text = render(reel, ideas, evidence, actions, day)
 
         if reel["status"] == "exported":
-            path = Path(reel["nexus_path"] or "")
+            path = Path(reel["note_path"] or "")
             why = _blocked(path, reel, inbox)
             if why:
                 r.skipped.append((reel["id"], why))
@@ -224,9 +224,9 @@ def run(
         h = sha256(_write_atomic(path, text))
         with conn:
             conn.execute(
-                "UPDATE reels SET nexus_path = ?, export_hash = ? WHERE id = ?",
+                "UPDATE reels SET note_path = ?, export_hash = ? WHERE id = ?",
                 (str(path), h, reel["id"]),
             )
-            db.transition(conn, reel["id"], "exported", nexus_path=str(path))
+            db.transition(conn, reel["id"], "exported", note_path=str(path))
         r.written += 1
     return r

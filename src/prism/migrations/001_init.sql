@@ -14,7 +14,9 @@ CREATE TABLE reels (
   duplicate_of  TEXT REFERENCES reels(id),
   summary       TEXT,
   card_line     TEXT,
-  nexus_path    TEXT,
+  note_path     TEXT,
+  source_tags   TEXT,  -- JSON list from the source (IG collection names)
+  export_hash   TEXT,  -- sha256 of the note as last written by prism
   user_status   TEXT DEFAULT 'baru',
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now')),

@@ -45,13 +45,12 @@ def throttle() -> None:
 
 
 def _opts(**extra) -> dict:
+    d = settings.download
+    cookies = (
+        {"cookiesfrombrowser": (d.browser, d.browser_profile)} if d.browser else {}
+    )
     return {
-        # profil eksplisit: tanpa ini yt-dlp ambil profil yang Cookies-nya
-        # terakhir berubah, belum tentu yang login Instagram
-        "cookiesfrombrowser": (
-            settings.download.browser,
-            settings.download.browser_profile,
-        ),
+        **cookies,
         "skip_download": True,
         "quiet": True,
         "no_warnings": True,
