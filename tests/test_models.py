@@ -6,36 +6,36 @@ from pydantic import ValidationError
 from prism.models import Curation
 
 CATS = {
-    "konten-yt-ai": "core",
-    "config-claude-code": "core",
-    "ide-project": "core",
+    "recipes": "core",
+    "learn": "core",
+    "projects": "core",
     "desain-ui": "proposed",
     "crypto": "rejected",
 }
 
-# contoh dari .docs/CURATION.md
+# example from docs/CURATION.md
 VALID = {
     "reel_id": "ig_C9xyz",
-    "summary": "1-2 kalimat isi reel, bahasa Indonesia.",
-    "card_line": "Kalimat pendek untuk kartu UI, maks 70 karakter",
+    "summary": "1-2 sentences on what the reel shows.",
+    "card_line": "Short one-liner, max 70 characters",
     "duplicate_of": None,
     "duplicate_reason": None,
     "ideas": [
         {
-            "title": "Judul ide singkat",
-            "detail": "Apa yang bisa diambil, konkret.",
-            "why_relevant": "Kenapa berguna untuk Rakha secara spesifik.",
-            "category": "config-claude-code",
-            "confidence": "sedang",
+            "title": "Short idea title",
+            "detail": "What to take from it, concretely.",
+            "why_relevant": "Why this is useful to the user, specifically.",
+            "category": "learn",
+            "confidence": "medium",
         }
     ],
     "evidence": [
-        {"label": "terlihat", "text": "Layar menampilkan SKILL.md", "at_s": 12.0},
-        {"label": "dugaan", "text": "Kemungkinan memakai hook", "at_s": None},
-        {"label": "tidak-diketahui", "text": "Nama repo tidak disebut", "at_s": None},
+        {"label": "seen", "text": "Screen shows SKILL.md", "at_s": 12.0},
+        {"label": "guessed", "text": "Probably uses a hook", "at_s": None},
+        {"label": "unknown", "text": "Repo name not mentioned", "at_s": None},
     ],
     "proposed_category": None,
-    "next_actions": ["Cari repo skill yang disebut di detik 0:12"],
+    "next_actions": ["Find the repo mentioned at 0:12"],
 }
 
 
@@ -59,7 +59,7 @@ def proposal(slug):
 
 def test_valid_example():
     c = check(VALID)
-    assert c.ideas[0].category == "config-claude-code"
+    assert c.ideas[0].category == "learn"
     assert check(variant(ideas=[], evidence=[], next_actions=[])).ideas == []
 
 
@@ -75,16 +75,16 @@ def test_existing_proposed_and_own_proposal_usable():
         (variant(summary="x" * 301), "summary"),
         (variant(summary="   "), "summary"),
         (variant(evidence=[{"label": "yakin", "text": "t"}]), "label"),
-        (variant(evidence=[{"label": "dugaan", "text": "t", "at_s": -1}]), "at_s"),
-        (variant(ideas=[{**idea("ide-project"), "confidence": "pasti"}]), "confidence"),
-        (variant(ideas=[idea("ide-project")] * 5), "ideas"),
+        (variant(evidence=[{"label": "guessed", "text": "t", "at_s": -1}]), "at_s"),
+        (variant(ideas=[{**idea("projects"), "confidence": "pasti"}]), "confidence"),
+        (variant(ideas=[idea("projects")] * 5), "ideas"),
         (variant(tags=["x"]), "tags"),
-        (variant(ideas=[idea("crypto")]), "crypto bukan kategori"),
-        (variant(ideas=[idea("ngawur")]), "ngawur bukan kategori"),
+        (variant(ideas=[idea("crypto")]), "crypto is not an active"),
+        (variant(ideas=[idea("bogus")]), "bogus is not an active"),
         (variant(proposed_category=proposal("Desain UI")), "slug"),
         (variant(proposed_category=proposal("crypto")), "status rejected"),
-        (variant(duplicate_of="ig_A", duplicate_reason="sama"), "ideas harus kosong"),
-        (variant(ideas=[], duplicate_of="ig_A"), "duplicate_reason wajib"),
+        (variant(duplicate_of="ig_A", duplicate_reason="same"), "ideas must be empty"),
+        (variant(ideas=[], duplicate_of="ig_A"), "duplicate_reason is required"),
     ],
 )
 def test_rejected(data, msg):
@@ -98,7 +98,7 @@ def test_duplicate_valid():
 
 
 def test_context_required():
-    with pytest.raises(ValidationError, match="context categories"):
+    with pytest.raises(ValidationError, match="categories context"):
         Curation.model_validate(VALID)
 
 
@@ -107,6 +107,6 @@ def test_errors_reported_together():
     with pytest.raises(ValidationError) as e:
         check(data)
     assert e.value.error_count() == 2
-    cross = variant(ideas=[idea("ngawur")], proposed_category=proposal("crypto"))
-    with pytest.raises(ValidationError, match="crypto.*ngawur"):
+    cross = variant(ideas=[idea("bogus")], proposed_category=proposal("crypto"))
+    with pytest.raises(ValidationError, match="crypto.*bogus"):
         check(cross)

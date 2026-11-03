@@ -26,10 +26,8 @@ def test_shortcode(url, expected):
     assert fetch.shortcode(url) == expected
 
 
-def item(sid, url, card_type="InstagramReel", title="t"):
-    return SourceItem(
-        source="mymind", source_id=sid, url=url, title=title, card_type=card_type
-    )
+def item(sid, url, title="t"):
+    return SourceItem(source="ig_export", source_id=sid, url=url, title=title)
 
 
 class FakeAdapter:
@@ -90,13 +88,13 @@ def events(conn, type):
 def test_reels_queued_once_and_rerun_idempotent(conn):
     items = [
         item("c1", "https://www.instagram.com/reel/AAA/?x=1"),
-        item("c2", "https://example.com", card_type="WebPage"),
+        item("c2", "https://example.com"),
     ]
     r = run(conn, items)
     assert (r.new_reel, r.not_instagram) == (1, 1)
     assert rows(conn) == {"ig_AAA": ("queued", "https://www.instagram.com/p/AAA/")}
     assert events(conn, "reel_queued") == [
-        ("ig_AAA", {"title": "t", "source": "mymind"})
+        ("ig_AAA", {"title": "t", "source": "ig_export"})
     ]
 
     r = run(conn, items)
@@ -110,7 +108,7 @@ def test_same_shortcode_other_card_logged_once(conn):
         item("c2", "https://www.instagram.com/p/AAA/?igsh=z"),
     ]
     r = run(conn, items)
-    assert (r.new_reel, r.dup_cards) == (1, 1)
+    assert (r.new_reel, r.duplicates) == (1, 1)
     run(conn, items)
     assert list(rows(conn)) == ["ig_AAA"]
     assert events(conn, "source_duplicate") == [("ig_AAA", {"source_id": "c2"})]
@@ -118,15 +116,15 @@ def test_same_shortcode_other_card_logged_once(conn):
 
 def test_posts_probed_photo_queued_not_reprobed(conn):
     items = [
-        item("c1", "https://www.instagram.com/p/VID/", "InstagramPost"),
-        item("c2", "https://www.instagram.com/p/PIC/", "InstagramPost"),
-        item("c3", "https://www.instagram.com/p/REELP/", "InstagramReel"),
+        item("c1", "https://www.instagram.com/p/VID/"),
+        item("c2", "https://www.instagram.com/p/PIC/"),
+        item("c3", "https://www.instagram.com/reel/REELP/"),
     ]
     probe = FakeProbe({"VID": True, "PIC": False})
     r = run(conn, items, probe)
     assert (r.new_reel, r.new_post, r.new_photo) == (1, 1, 1)
-    assert probe.calls == ["VID", "PIC"]  # InstagramReel di /p/ tidak di-probe
-    assert rows(conn)["ig_PIC"][0] == "queued"  # post foto ikut dikurasi
+    assert probe.calls == ["VID", "PIC"]  # /reel/ is never probed
+    assert rows(conn)["ig_PIC"][0] == "queued"  # photo posts are curated too
     assert events(conn, "reel_skipped") == []
 
     probe2 = FakeProbe({})
@@ -135,10 +133,7 @@ def test_posts_probed_photo_queued_not_reprobed(conn):
 
 
 def test_probe_stops_after_two_failures(conn):
-    items = [
-        item(f"c{i}", f"https://www.instagram.com/p/P{i}/", "InstagramPost")
-        for i in range(4)
-    ]
+    items = [item(f"c{i}", f"https://www.instagram.com/p/P{i}/") for i in range(4)]
     err = download.IgError("rate limit", transient=True)
     probe = FakeProbe({"P0": err, "P1": err, "P2": True, "P3": True})
     r = run(conn, items, probe)
@@ -151,10 +146,7 @@ def test_probe_stops_after_two_failures(conn):
 
 
 def test_probe_limit_per_run(conn):
-    items = [
-        item(f"c{i}", f"https://www.instagram.com/p/P{i}/", "InstagramPost")
-        for i in range(3)
-    ]
+    items = [item(f"c{i}", f"https://www.instagram.com/p/P{i}/") for i in range(3)]
     probe = FakeProbe({f"P{i}": True for i in range(3)})
     r = run(conn, items, probe, max_probes=2)
     assert (r.new_post, r.deferred) == (2, 1)
@@ -167,7 +159,7 @@ def test_limit_new_inserts(conn):
     assert sorted(rows(conn)) == ["ig_R0", "ig_R1"]
 
 
-# pesan asli yt-dlp untuk post yang sudah dihapus/privat (DaNUKQ1EW3B)
+# real yt-dlp message for a deleted/private post (DaNUKQ1EW3B)
 DEAD = (
     "ERROR: [Instagram] DaNUKQ1EW3B: Instagram sent an empty media response."
     " Check if this post is accessible in your browser without being logged-in."
@@ -210,7 +202,7 @@ def test_classify_probe_errors(monkeypatch):
 
 
 def test_dead_post_skipped_after_three_runs(conn):
-    items = [item("c1", "https://www.instagram.com/p/DEAD/", "InstagramPost")]
+    items = [item("c1", "https://www.instagram.com/p/DEAD/")]
     dead = download.IgError(DEAD, transient=False)
     for _ in range(2):
         r = run(conn, items, FakeProbe({"DEAD": dead}))
@@ -220,7 +212,7 @@ def test_dead_post_skipped_after_three_runs(conn):
     r = run(conn, items, FakeProbe({"DEAD": dead}))
     assert (r.deferred, r.unreachable) == (0, 1)
     assert rows(conn)["ig_DEAD"][0] == "skipped"
-    assert events(conn, "reel_skipped")[-1][1]["reason"] == "tidak_bisa_diakses"
+    assert events(conn, "reel_skipped")[-1][1]["reason"] == "unreachable"
     assert len(events(conn, "probe_failed")) == 3
 
     probe = FakeProbe({})
@@ -229,7 +221,7 @@ def test_dead_post_skipped_after_three_runs(conn):
 
 
 def test_transient_failures_never_skip(conn):
-    items = [item("c1", "https://www.instagram.com/p/RL/", "InstagramPost")]
+    items = [item("c1", "https://www.instagram.com/p/RL/")]
     err = download.IgError("rate-limit reached", transient=True)
     for _ in range(5):
         run(conn, items, FakeProbe({"RL": err}))
@@ -237,17 +229,12 @@ def test_transient_failures_never_skip(conn):
     assert events(conn, "probe_failed") == []
 
 
-def test_tags_saved_and_backfilled_for_old_reels(conn):
+def test_tags_saved(conn):
     it = item("c1", "https://www.instagram.com/reel/AAA/")
-    it.tags = ["ai", "claude"]
+    it.tags = ["food", "travel"]
     run(conn, [it])
     q = "SELECT source_tags FROM reels WHERE id = 'ig_AAA'"
-    assert json.loads(conn.execute(q).fetchone()[0]) == ["ai", "claude"]
-
-    with conn:  # reel lama: kolom belum terisi
-        conn.execute("UPDATE reels SET source_tags = NULL")
-    run(conn, [it])
-    assert json.loads(conn.execute(q).fetchone()[0]) == ["ai", "claude"]
+    assert json.loads(conn.execute(q).fetchone()[0]) == ["food", "travel"]
 
 
 def test_urls_file_skips_comments_and_dedups_by_shortcode(conn, tmp_path):

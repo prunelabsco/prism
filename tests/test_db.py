@@ -12,7 +12,7 @@ def conn(tmp_path):
     with c:
         c.execute(
             "INSERT INTO reels (id, source, source_id, url, status)"
-            " VALUES ('ig_x', 'mymind', 'card1', 'https://www.instagram.com/reel/x/', 'queued')"
+            " VALUES ('ig_x', 'ig_export', 'card1', 'https://www.instagram.com/reel/x/', 'queued')"
         )
     return c
 
@@ -33,7 +33,7 @@ def test_migrate_idempotent_and_seed(conn):
     slugs = [
         r[0] for r in conn.execute("SELECT slug FROM categories ORDER BY sort_order")
     ]
-    assert slugs == ["konten-yt-ai", "config-claude-code", "ide-project"]
+    assert slugs == ["recipes", "places", "learn", "projects", "shopping"]
 
 
 def test_valid_transition_writes_event(conn):
@@ -43,7 +43,7 @@ def test_valid_transition_writes_event(conn):
 
 
 def test_invalid_transition_rejected_without_side_effect(conn):
-    with pytest.raises(ValueError, match="tidak valid"):
+    with pytest.raises(ValueError, match="invalid transition"):
         db.transition(conn, "ig_x", "ready")
     assert status(conn)["status"] == "queued"
     assert events(conn) == []

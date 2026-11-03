@@ -5,8 +5,8 @@ import pytest
 
 from prism.sources.ig_export import IgExportSource
 
-# struktur meniru export asli 2026-11-02, isi karangan
-EMOJI = "🍴".encode().decode("latin-1")  # cara export Meta menyimpan non-ASCII
+# structure mirrors a real 2026-11-02 export, content made up
+EMOJI = "🍴".encode().decode("latin-1")  # how Meta exports store non-ASCII
 
 
 def media(url, user="someone"):
@@ -30,7 +30,7 @@ COLLECTIONS = [
         {"title": "Media", "dict": [
             {"dict": media("https://www.instagram.com/reel/AAA/?igsh=x"), "title": ""},
             {"dict": media("https://www.instagram.com/reel/CCC/"), "title": ""},
-            {"dict": [{"label": "Caption", "value": "post dihapus"}], "title": ""},
+            {"dict": [{"label": "Caption", "value": "deleted post"}], "title": ""},
         ]},
     ]},
     {"timestamp": 2, "media": [], "label_values": [
@@ -52,7 +52,7 @@ def write_export(root):
 
 def check(items):
     by = {i.source_id: i for i in items}
-    assert sorted(by) == ["AAA", "BBB", "CCC"]  # CCC cuma ada di collections
+    assert sorted(by) == ["AAA", "BBB", "CCC"]  # CCC only appears in collections
     a = by["AAA"]
     assert (a.source, a.title, a.tags) == ("ig_export", "@al🍴", ["food🍴", "design"])
     assert a.saved_at == "2023-11-14T22:13:20+00:00"

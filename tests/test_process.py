@@ -15,7 +15,7 @@ def add(conn, *ids, status="queued", attempts=0, error=None):
         for i in ids:
             conn.execute(
                 "INSERT INTO reels (id, source, source_id, url, status, attempts,"
-                " stage_error) VALUES (?, 'mymind', ?, ?, ?, ?, ?)",
+                " stage_error) VALUES (?, 'ig_export', ?, ?, ?, ?, ?)",
                 (i, i, f"https://www.instagram.com/p/{i}/", status, attempts, error),
             )
 
@@ -78,7 +78,7 @@ def test_download_ok_and_limit(conn, tmp_path):
     r = run(conn, tmp_path, f, limit=2)
     assert r.downloaded == 2 and r.extracted == 2 and f.calls == ["a", "b"]
     assert statuses(conn) == {"a": "ready", "b": "ready", "c": "queued"}
-    # run ulang: a, b tidak di-download/ekstrak lagi
+    # rerun: a, b not downloaded/extracted again
     f2 = FakeFetch()
     r = run(conn, tmp_path, f2)
     assert f2.calls == ["c"] and r.extracted == 1
@@ -136,9 +136,9 @@ def test_auto_retry_curating_failure_back_to_ready(conn, tmp_path):
 
 def test_cached_download_goes_to_extract(conn, tmp_path):
     add(conn, "done", status="downloading")
-    FakeFetch()("u", tmp_path / "done")  # file sudah ada dari run lama
+    FakeFetch()("u", tmp_path / "done")  # files left by an earlier run
     f = FakeFetch()
-    r = run(conn, tmp_path, f, limit=0)  # limit hanya untuk download
+    r = run(conn, tmp_path, f, limit=0)  # limit only caps downloads
     assert f.calls == [] and r.cached == 1 and r.extracted == 1
     assert statuses(conn) == {"done": "ready"}
 
@@ -156,22 +156,22 @@ def test_frame_error_fails(conn, tmp_path):
     add(conn, "a")
 
     def boom(out):
-        raise frames.FrameError("ffmpeg gagal")
+        raise frames.FrameError("ffmpeg failed")
 
     r = run(conn, tmp_path, FakeFetch(), extract=boom)
     assert r.failed == 1
     row = conn.execute("SELECT status, stage_error FROM reels").fetchone()
-    assert tuple(row) == ("failed", "extracting: ffmpeg gagal")
+    assert tuple(row) == ("failed", "extracting: ffmpeg failed")
 
 
 def test_transcribe_stage(conn, tmp_path):
     add(conn, "a", "b", "c", status="transcribing")
     (tmp_path / "a").mkdir()
-    fake_transcribe(tmp_path / "a")  # sudah selesai, dilewati
+    fake_transcribe(tmp_path / "a")  # already done, skipped
 
     def tr(out):
         if out.name == "b":
-            raise transcribe.TranscribeError("whisper gagal")
+            raise transcribe.TranscribeError("whisper failed")
         out.mkdir(exist_ok=True)
         fake_transcribe(out)
 
@@ -179,7 +179,7 @@ def test_transcribe_stage(conn, tmp_path):
     assert r.transcribed == 1 and r.failed == 1 and r.extracted == 0
     assert statuses(conn) == {"a": "ready", "b": "failed", "c": "ready"}
     err = conn.execute("SELECT stage_error FROM reels WHERE id = 'b'").fetchone()[0]
-    assert err == "transcribing: whisper gagal"
+    assert err == "transcribing: whisper failed"
 
 
 @pytest.mark.parametrize("keep", [False, True])
@@ -191,7 +191,7 @@ def test_ready_and_keep_video(conn, tmp_path, keep):
     assert (tmp_path / "a" / "video.mp4").exists() is keep
     ev = conn.execute("SELECT type FROM events ORDER BY id DESC LIMIT 1").fetchone()
     assert ev[0] == "reel_ready"
-    # run ulang: reel ready tidak disentuh
+    # rerun: ready reels untouched
     assert run(conn, tmp_path, FakeFetch()).ready == 0
 
 

@@ -1,4 +1,4 @@
--- Skema awal, sesuai .docs/DATA.md
+-- Initial schema, see docs/DATA.md
 
 CREATE TABLE reels (
   id            TEXT PRIMARY KEY,
@@ -17,7 +17,8 @@ CREATE TABLE reels (
   note_path     TEXT,
   source_tags   TEXT,  -- JSON list from the source (IG collection names)
   export_hash   TEXT,  -- sha256 of the note as last written by prism
-  user_status   TEXT DEFAULT 'baru',
+  user_status   TEXT DEFAULT 'new',
+
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (source, source_id)
@@ -62,13 +63,15 @@ CREATE TABLE events (
 );
 CREATE INDEX idx_events_id ON events(id);
 
+-- Starter categories, generic on purpose. Rename/replace them to fit what you save.
 INSERT INTO categories (slug, name, description, status, sort_order) VALUES
-  ('konten-yt-ai', 'Konten YT AI',
-   'Format, hook, gaya edit, atau topik yang bisa dibuat ulang untuk channel YouTube AI (long form atau short)',
-   'core', 10),
-  ('config-claude-code', 'Config Claude Code',
-   'Skill, command, hook, MCP, workflow, atau prompt yang bisa dipasang/diadaptasi ke setup Claude Code Rakha',
-   'core', 20),
-  ('ide-project', 'Ide Project',
-   'Ide aplikasi, fitur, bisnis, atau eksperimen teknis yang bisa dibangun',
-   'core', 30);
+  ('recipes', 'Recipes',
+   'Dishes, drinks, or cooking techniques you could make yourself', 'core', 10),
+  ('places', 'Places',
+   'Restaurants, cafes, shops, or travel spots worth visiting', 'core', 20),
+  ('learn', 'Learn',
+   'Skills, tips, tools, or explanations worth learning or trying', 'core', 30),
+  ('projects', 'Projects',
+   'Ideas you could build, make, or start: apps, crafts, content, side projects', 'core', 40),
+  ('shopping', 'Shopping',
+   'Products, gear, or outfits worth considering', 'core', 50);

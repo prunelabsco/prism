@@ -1,7 +1,7 @@
 [project]
 name = "prism"
 version = "0.1.0"
-description = "Kurasi reels tersimpan jadi ide berkategori (lab Spectra)"
+description = "Turn saved Instagram reels into categorized ideas, locally, with your own AI agent"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "httpx>=0.28.1",

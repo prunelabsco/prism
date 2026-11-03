@@ -1,4 +1,4 @@
-"""Antrian -> download, frame, transkrip, paket -> ready. Aturan di PIPELINE.md."""
+"""Queue -> download, frames, transcript, packet -> ready. Rules in docs/PIPELINE.md."""
 
 import logging
 import sqlite3
@@ -11,7 +11,7 @@ from prism.config import settings
 
 log = logging.getLogger("prism.process")
 
-# tahap lokal gagal = reel gagal, run lanjut. OSError/ValueError/KeyError: file rusak
+# a local stage failing fails that reel, the run continues. OSError/ValueError/KeyError: broken files
 STAGE_ERRORS = (
     frames.FrameError,
     transcribe.TranscribeError,
@@ -26,13 +26,13 @@ EMPTY_MEDIA = "empty media"
 
 @dataclass
 class ProcessReport:
-    retried: int = 0  # failed -> queued otomatis
+    retried: int = 0  # failed -> queued automatically
     downloaded: int = 0
-    cached: int = 0  # video.mp4 + meta.json sudah ada
-    rate_limited: int = 0  # balik ke queued
-    extracted: int = 0  # frame diekstrak run ini
+    cached: int = 0  # video.mp4 + meta.json already there
+    rate_limited: int = 0  # back to queued
+    extracted: int = 0  # frames extracted this run
     transcribed: int = 0
-    ready: int = 0  # paket jadi, siap dikurasi
+    ready: int = 0  # packet built, ready to curate
     failed: int = 0
     stopped: str | None = None
 
@@ -48,9 +48,9 @@ def run(
     keep_video: bool | None = None,
     reels_dir: Path | None = None,
 ) -> ProcessReport:
-    """Aman dijalankan berulang: reel nyangkut di tengah tahap diambil lagi.
+    """Safe to re-run: reels stuck mid-stage are picked up again.
 
-    `limit`/`max_per_run` hanya membatasi download (yang menyentuh Instagram).
+    `limit`/`max_per_run` only cap downloads (the part that touches Instagram).
     """
     reels_dir = reels_dir or settings.reels_dir
     if keep_video is None:
@@ -66,7 +66,7 @@ def run(
         db.retry(conn, row["id"])
         r.retried += 1
 
-    # tahap lokal berurutan: (status, sudah selesai?, jalankan, field laporan)
+    # local stages in order: (status, done?, run, report field)
     local = [
         ("extracting", frames.is_complete, extract, "extracted"),
         ("transcribing", transcribe.is_complete, transcribe_fn, "transcribed"),
@@ -97,7 +97,7 @@ def run(
                 try:
                     fetch_video(row["url"], out)
                 except download.IgError as e:
-                    log.warning("download %s gagal: %s", reel_id, e)
+                    log.warning("download %s failed: %s", reel_id, e)
                     if e.transient:
                         db.transition(conn, reel_id, "queued")
                         r.rate_limited += 1
@@ -107,14 +107,12 @@ def run(
                     else:
                         db.transition(conn, reel_id, "failed", error=str(e)[:300])
                         r.failed += 1
-                        # "empty media" = post mati ATAU sesi IG tidak login:
-                        # tetap failed, tapi 2x berturut-turut hentikan run
+                        # "empty media" = dead post OR not logged in to Instagram:
+                        # still failed, but twice in a row stops the run
                         empty = empty + 1 if EMPTY_MEDIA in str(e).lower() else 0
                         fails = 0
                         if empty >= 2:
-                            r.stopped = (
-                                f"empty media 2x berturut-turut, cek login IG: {e}"
-                            )
+                            r.stopped = f"empty media twice in a row, check your Instagram login: {e}"
                     continue
                 fails = empty = 0
                 r.downloaded += 1
@@ -124,7 +122,7 @@ def run(
 
         for stage, is_complete, fn, field in local:
             if status in order and order.index(status) > order.index(stage):
-                continue  # tahap ini sudah lewat
+                continue  # stage already passed
             if status != stage:
                 db.transition(conn, reel_id, stage)
                 status = stage
@@ -133,7 +131,7 @@ def run(
             try:
                 fn(out)
             except STAGE_ERRORS as e:
-                log.warning("%s %s gagal: %s", stage, reel_id, e)
+                log.warning("%s %s failed: %s", stage, reel_id, e)
                 db.transition(conn, reel_id, "failed", error=str(e)[:300])
                 r.failed += 1
                 break
@@ -142,13 +140,14 @@ def run(
             try:
                 build_packet(conn, reel_id, out)
             except STAGE_ERRORS as e:
-                log.warning("packet %s gagal: %s", reel_id, e)
+                log.warning("packet %s failed: %s", reel_id, e)
                 db.transition(conn, reel_id, "failed", error=str(e)[:300])
                 r.failed += 1
                 continue
             db.transition(conn, reel_id, "ready")
             r.ready += 1
-            # setelah ready: crash di sini tidak membuang video reel yang belum jadi
+            # only after ready: a crash before this never loses an unfinished reel's video
+
             if not keep_video:
                 (out / "video.mp4").unlink(missing_ok=True)
     return r

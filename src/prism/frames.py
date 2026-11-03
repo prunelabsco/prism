@@ -1,4 +1,4 @@
-"""Video -> frame berdasarkan pergantian adegan + frames.json. Aturan di PIPELINE.md."""
+"""Video -> frames at scene changes + frames.json. Rules in docs/PIPELINE.md."""
 
 import json
 import re
@@ -8,8 +8,8 @@ from pathlib import Path
 from prism.config import settings
 
 _PTS = re.compile(r"pts_time:([\d.]+)")
-MIN_GAP_S = 0.5  # kandidat lebih rapat dari ini dianggap frame yang sama
-# scene change diambil sedikit setelah titik transisi, supaya tidak buram setengah
+MIN_GAP_S = 0.5  # candidates closer than this count as the same frame
+# grab slightly after a scene change, so the frame isn't half a blurry transition
 SCENE_OFFSET_S = 0.3
 
 
@@ -25,11 +25,11 @@ def _ffmpeg(*args: str) -> str:
         ).stderr  # fmt: skip
     except (OSError, subprocess.CalledProcessError) as e:
         tail = getattr(e, "stderr", "") or ""
-        raise FrameError(f"ffmpeg gagal: {e} {tail[-300:]}") from e
+        raise FrameError(f"ffmpeg failed: {e} {tail[-300:]}") from e
 
 
 def scene_times(video: Path, threshold: float) -> list[float]:
-    """Detik tiap pergantian adegan. Tidak menulis file."""
+    """Second of each scene change. Writes no files."""
     err = _ffmpeg(
         "-i", str(video), "-vf", f"select='gt(scene,{threshold})',showinfo",
         "-f", "null", "-",
@@ -40,10 +40,10 @@ def scene_times(video: Path, threshold: float) -> list[float]:
 def pick_times(
     scenes: list[float], duration: float, max_frames: int, max_gap: float
 ) -> list[float]:
-    """Detik 0 + tengah selalu ada, lalu scene change, lalu isi celah > max_gap.
+    """Second 0 + the midpoint always, then scene changes, then fill gaps > max_gap.
 
-    Scene change dipangkas merata kalau melebihi kuota. Sisa kuota dipakai
-    mengisi celah: reel slide dengan transisi halus jarang memicu scene change.
+    Scene changes are thinned evenly when over quota. Leftover quota fills
+    gaps: slideshow reels with soft transitions rarely trigger scene changes.
     """
     fixed = [0.0, round(duration / 2, 2)]
     rest: list[float] = []
@@ -53,13 +53,13 @@ def pick_times(
             rest.append(t)
     room = max_frames - len(fixed)
     if len(rest) > room:
-        # ambil merata dari daftar urut, ujung awal & akhir ikut
+        # take evenly from the sorted list, both ends included
         step = (len(rest) - 1) / max(room - 1, 1)
         rest = [rest[round(i * step)] for i in range(room)] if room > 0 else []
 
     times = sorted(fixed + rest)
     while len(times) < max_frames:
-        # celah terbesar (termasuk ujung sampai durasi) dibelah dua
+        # split the largest gap (including the tail up to duration) in half
         bounds = times + [duration]
         gap, i = max((bounds[j + 1] - bounds[j], j) for j in range(len(times)))
         if gap <= max_gap:
@@ -73,7 +73,7 @@ def is_complete(out_dir: Path) -> bool:
 
 
 def extract(out_dir: Path) -> list[dict]:
-    """Baca video.mp4 + meta.json di out_dir, tulis frames/*.jpg + frames.json."""
+    """Read video.mp4 + meta.json in out_dir, write frames/*.jpg + frames.json."""
     cfg = settings.frames
     video = out_dir / "video.mp4"
     meta = json.loads((out_dir / "meta.json").read_text(encoding="utf-8"))
@@ -83,7 +83,7 @@ def extract(out_dir: Path) -> list[dict]:
         cfg.max_frames,
         cfg.max_gap_s,
     )
-    width = min(meta["width"], cfg.width)  # reel 360p tidak di-upscale
+    width = min(meta["width"], cfg.width)  # 360p reels are not upscaled
 
     fdir = out_dir / "frames"
     fdir.mkdir(exist_ok=True)
@@ -97,7 +97,8 @@ def extract(out_dir: Path) -> list[dict]:
             "-vf", f"scale={width}:-2", "-q:v", "3", "-y", str(out_dir / rel),
         )  # fmt: skip
         if not (out_dir / rel).exists():
-            raise FrameError(f"frame {rel} di {t}s tidak terbentuk")
+            raise FrameError(f"frame {rel} at {t}s was not created")
+
         frames.append({"path": rel, "t": round(t, 2)})
     (out_dir / "frames.json").write_text(json.dumps(frames, indent=2), encoding="utf-8")
     return frames

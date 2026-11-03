@@ -1,4 +1,4 @@
-"""Sumber -> antrian: normalisasi URL, dedup, probe post, insert reel. Aturan di PIPELINE.md."""
+"""Source -> queue: normalize URLs, dedup, probe posts, insert reels. Rules in docs/PIPELINE.md."""
 
 import json
 import logging
@@ -13,7 +13,7 @@ from prism.sources.base import SourceAdapter, SourceItem
 
 log = logging.getLogger("prism.fetch")
 
-# [username/](reel|reels|p|tv)/<shortcode>, query & tracking diabaikan
+# [username/](reel|reels|p|tv)/<shortcode>, query & tracking ignored
 _IG = re.compile(
     r"instagram\.com/(?:[\w.]+/)?(reels?|p|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE
 )
@@ -23,28 +23,24 @@ _IG = re.compile(
 class FetchReport:
     new_reel: int = 0
     new_post: int = 0
-    new_photo: int = 0  # post tanpa video, dikurasi dari slide foto
-    unreachable: int = 0  # post gagal diakses MAX_ATTEMPTS kali -> skipped
-    deferred: int = 0  # post belum di-probe (batas run / gangguan)
+    new_photo: int = 0  # post without video, curated from its photo slides
+    unreachable: int = 0  # post unreachable MAX_ATTEMPTS times -> skipped
+    deferred: int = 0  # post not probed yet (run cap / hiccup)
     existing: int = 0
-    dup_cards: int = 0
+    duplicates: int = 0  # same reel already queued from another source
     not_instagram: int = 0
     probe_stopped: str | None = None
 
 
 def shortcode(url: str) -> tuple[str, str] | None:
-    """-> (jenis path, shortcode), atau None kalau bukan reel/post Instagram."""
+    """-> (path kind, shortcode), or None if not an Instagram reel/post."""
     m = _IG.search(url)
     return (m.group(1).lower(), m.group(2)) if m else None
 
 
 def canonical_url(code: str) -> str:
-    # ponytail: satu bentuk untuk reel & post. Dugaan: yt-dlp terima /p/ untuk reel, dibuktikan di download
+    # ponytail: one form for reels & posts, yt-dlp accepts /p/ for reels too
     return f"https://www.instagram.com/p/{code}/"
-
-
-def _needs_probe(kind: str, item: SourceItem) -> bool:
-    return kind == "p" and item.card_type != "InstagramReel"
 
 
 def _log_dup_once(conn: sqlite3.Connection, reel_id: str, source_id: str) -> None:
@@ -59,7 +55,7 @@ def _log_dup_once(conn: sqlite3.Connection, reel_id: str, source_id: str) -> Non
 
 
 def _count_probe_failed(conn: sqlite3.Connection, reel_id: str, error: str) -> int:
-    """Catat satu kegagalan permanen-ish, return total kegagalan reel ini."""
+    """Record one permanent-ish failure, return this reel's failure total."""
     with conn:
         db.log_event(conn, "probe_failed", reel_id, error=error[:300])
     return conn.execute(
@@ -74,7 +70,7 @@ def _insert(
     code: str,
     item: SourceItem,
     status: str,
-    reason: str = "bukan_video",
+    reason: str = "not_video",
 ) -> None:
     with conn:
         conn.execute(
@@ -111,7 +107,7 @@ def run(
     probe: Callable[[str], bool] = download.probe,
     throttle: Callable[[], None] = download.throttle,
 ) -> FetchReport:
-    """Idempoten: dijalankan ulang tidak menambah reel/event yang sama."""
+    """Idempotent: re-running adds no duplicate reels or events."""
     if max_probes is None:
         max_probes = settings.download.max_per_run
     r = FetchReport()
@@ -126,26 +122,20 @@ def run(
         reel_id = f"ig_{code}"
 
         row = conn.execute(
-            "SELECT source_id, source_tags FROM reels WHERE id = ?", (reel_id,)
+            "SELECT source_id FROM reels WHERE id = ?", (reel_id,)
         ).fetchone()
         if row:
             if row["source_id"] == item.source_id:
                 r.existing += 1
-                if row["source_tags"] is None:  # reel lama sebelum migrasi 002
-                    with conn:
-                        conn.execute(
-                            "UPDATE reels SET source_tags = ? WHERE id = ?",
-                            (json.dumps(item.tags, ensure_ascii=False), reel_id),
-                        )
             else:
-                r.dup_cards += 1
+                r.duplicates += 1
                 _log_dup_once(conn, reel_id, item.source_id)
             continue
 
         if limit is not None and r.new_reel + r.new_post + r.new_photo >= limit:
-            continue  # tetap lanjut loop supaya hitungan existing/dup lengkap
+            continue  # keep looping so the existing/duplicate counts are complete
 
-        if not _needs_probe(kind, item):
+        if kind != "p":  # /reel/ is always a video; /p/ may be photos
             _insert(conn, reel_id, code, item, "queued")
             r.new_reel += 1
             continue
@@ -159,11 +149,12 @@ def run(
         try:
             has_video = probe(canonical_url(code))
         except download.IgError as e:
-            log.warning("probe %s gagal: %s", reel_id, e)
+            log.warning("probe %s failed: %s", reel_id, e)
             if not e.transient and (
                 _count_probe_failed(conn, reel_id, str(e)) >= db.MAX_ATTEMPTS
             ):
-                _insert(conn, reel_id, code, item, "skipped", "tidak_bisa_diakses")
+                _insert(conn, reel_id, code, item, "skipped", "unreachable")
+
                 r.unreachable += 1
             else:
                 r.deferred += 1

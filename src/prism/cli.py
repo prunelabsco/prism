@@ -1,4 +1,4 @@
-"""Entry point CLI Prism. Hanya routing perintah."""
+"""Prism CLI entry point. Command routing only."""
 
 import logging
 import sqlite3
@@ -10,12 +10,13 @@ import typer
 from prism import config, db
 
 app = typer.Typer(
-    help="Prism: kurasi reels jadi ide berkategori.", no_args_is_help=True
+    help="Prism: turn saved Instagram reels into categorized ideas.",
+    no_args_is_help=True,
 )
 
 
 def _log_to_file() -> None:
-    """Logger `prism` (termasuk yt-dlp) ke data/logs/prism.log, terminal cukup ringkasan."""
+    """`prism` logger (yt-dlp included) goes to logs/prism.log, the terminal gets summaries."""
     logger = logging.getLogger("prism")
     if logger.handlers:
         return
@@ -39,7 +40,7 @@ def _open() -> sqlite3.Connection:
 
 @app.command()
 def init() -> None:
-    """Buat database & folder data. Aman dijalankan berulang."""
+    """Create the database, data folders and a config template. Safe to re-run."""
     s = config.settings
     existed = s.db_path.exists()
     for d in (s.reels_dir, s.logs_dir):
@@ -52,90 +53,85 @@ def init() -> None:
     before = conn.execute("PRAGMA user_version").fetchone()[0]
     after = db.migrate(conn)
     if not existed:
-        typer.echo(f"Database dibuat: {s.db_path} (skema v{after})")
+        typer.echo(f"Database created: {s.db_path} (schema v{after})")
     elif after != before:
-        typer.echo(f"Skema diupgrade v{before} -> v{after}")
+        typer.echo(f"Schema upgraded v{before} -> v{after}")
     else:
-        typer.echo(f"Sudah di-init, skema v{after}")
+        typer.echo(f"Already initialized, schema v{after}")
 
 
 @app.command()
 def fetch(
-    limit: int | None = typer.Option(None, help="Batas reel baru yang di-insert"),
-    source: str = typer.Option("ig-export", help="ig-export | urls"),
-    # Annotated: Path bukan tipe immutable, default typer.Option(...) kena ruff B008
     file: Annotated[
-        Path | None,
-        typer.Option(exists=True, help="Daftar URL, atau ZIP/folder export Instagram"),
-    ] = None,
+        Path,
+        typer.Argument(
+            exists=True, help="Instagram export (ZIP or folder), or a URL list file"
+        ),
+    ],
+    source: str = typer.Option("ig-export", help="ig-export | urls"),
+    limit: int | None = typer.Option(None, help="Max new reels to queue"),
 ) -> None:
-    """Tarik item baru dari sumber ke antrian."""
-    # import di sini: yt-dlp berat, perintah lain tidak butuh
+    """Queue new reels from an Instagram export or a URL list."""
+    # imported here: yt-dlp is heavy, other commands don't need it
     from prism import fetch as fetch_mod
+    from prism.sources.ig_export import IgExportSource
+    from prism.sources.urls import UrlsSource
 
-    if source in ("urls", "ig-export"):
-        if file is None:
-            raise typer.BadParameter(
-                f"--source {source} butuh --file", param_hint="--file"
-            )
-        from prism.sources.ig_export import IgExportSource
-        from prism.sources.urls import UrlsSource
-
-        adapter = UrlsSource(file) if source == "urls" else IgExportSource(file)
-        try:
-            r = fetch_mod.run(_open(), adapter, limit=limit)
-        except (FileNotFoundError, ValueError) as e:  # export rusak/bukan export IG
-            typer.echo(str(e), err=True)
-            raise typer.Exit(1) from None
-    else:
-        raise typer.BadParameter("pilih urls atau ig-export", param_hint="--source")
+    if source not in ("urls", "ig-export"):
+        raise typer.BadParameter("choose ig-export or urls", param_hint="--source")
+    adapter = UrlsSource(file) if source == "urls" else IgExportSource(file)
+    try:
+        r = fetch_mod.run(_open(), adapter, limit=limit)
+    except (FileNotFoundError, ValueError) as e:  # broken / not an Instagram export
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from None
 
     typer.echo(
-        f"{r.new_reel + r.new_post + r.new_photo} baru ({r.new_reel} reel,"
-        f" {r.new_post} post video, {r.new_photo} post foto)"
-        f" · {r.unreachable} post tidak bisa diakses"
-        f" · {r.deferred} post ditunda"
-        f" · {r.existing} sudah ada · {r.dup_cards} kartu duplikat"
-        f" · {r.not_instagram} bukan Instagram"
+        f"{r.new_reel + r.new_post + r.new_photo} new ({r.new_reel} reels,"
+        f" {r.new_post} video posts, {r.new_photo} photo posts)"
+        f" · {r.unreachable} unreachable"
+        f" · {r.deferred} posts deferred"
+        f" · {r.existing} already queued · {r.duplicates} duplicates"
+        f" · {r.not_instagram} not Instagram"
     )
     if r.deferred:
-        typer.echo("Post ditunda di-probe lagi pada `prism fetch` berikutnya.")
+        typer.echo("Deferred posts are checked on the next `prism fetch`.")
     if r.probe_stopped:
-        typer.echo(f"Probe dihentikan (gagal 2x): {r.probe_stopped}", err=True)
+        typer.echo(f"Probing stopped (failed twice): {r.probe_stopped}", err=True)
 
 
 @app.command()
 def process(
     limit: int | None = typer.Option(
-        None, help="Batas reel yang di-download run ini (maks max_per_run)"
+        None, help="Max reels to download this run (capped at max_per_run)"
     ),
 ) -> None:
-    """Jalankan pipeline untuk reel di antrian (download, frame, transkrip, paket)."""
+    """Run the queue: download, extract frames, transcribe, build packets."""
     from prism import process as process_mod
 
     r = process_mod.run(_open(), limit=limit)
     typer.echo(
-        f"{r.downloaded} ter-download · {r.cached} sudah ada"
-        f" · {r.extracted} frame diekstrak · {r.transcribed} ditranskrip"
-        f" · {r.ready} siap dikurasi"
-        f" · {r.rate_limited} kena rate limit (balik ke antrian) · {r.failed} gagal"
-        f" · {r.retried} retry otomatis"
+        f"{r.downloaded} downloaded · {r.cached} cached"
+        f" · {r.extracted} frame sets · {r.transcribed} transcribed"
+        f" · {r.ready} ready to curate"
+        f" · {r.rate_limited} rate limited (requeued) · {r.failed} failed"
+        f" · {r.retried} auto-retried"
     )
     if r.stopped:
-        typer.echo(f"Download dihentikan (rate limit/login 2x): {r.stopped}", err=True)
+        typer.echo(f"Downloads stopped (rate limit/login twice): {r.stopped}", err=True)
 
 
 @app.command()
 def retry(
-    reel_id: str | None = typer.Argument(None, help="Reel `failed` yang diulang"),
-    all_: bool = typer.Option(False, "--all", help="Ulang semua reel `failed`"),
+    reel_id: str | None = typer.Argument(None, help="A `failed` reel to retry"),
+    all_: bool = typer.Option(False, "--all", help="Retry every `failed` reel"),
     photos: bool = typer.Option(
-        False, "--photos", help="Post foto yang dulu di-skip (`bukan_video`) ke antrian"
+        False, "--photos", help="Queue photo posts that were skipped (`not_video`)"
     ),
 ) -> None:
-    """Kembalikan reel `failed` ke antrian (termasuk yang sudah 3x gagal)."""
+    """Send `failed` reels back to the queue (including ones that failed 3 times)."""
     if [reel_id is not None, all_, photos].count(True) != 1:
-        typer.echo("Sebut reel_id, --all, atau --photos (salah satu).", err=True)
+        typer.echo("Pass exactly one of: reel_id, --all, --photos.", err=True)
         raise typer.Exit(1)
     conn = _open()
     if photos:
@@ -144,12 +140,12 @@ def retry(
             for r in conn.execute(
                 "SELECT e.reel_id FROM events e JOIN reels r ON r.id = e.reel_id"
                 " WHERE e.type = 'reel_skipped' AND r.status = 'skipped'"
-                " AND json_extract(e.payload, '$.reason') = 'bukan_video'"
+                " AND json_extract(e.payload, '$.reason') = 'not_video'"
             )
         ]
         for i in ids:
             db.transition(conn, i, "queued")
-        typer.echo(f"{len(ids)} post foto ke antrian. Jalankan `prism process`.")
+        typer.echo(f"{len(ids)} photo posts queued. Run `prism process`.")
         return
     if all_:
         ids = [
@@ -161,48 +157,48 @@ def retry(
             "SELECT status FROM reels WHERE id = ?", (reel_id,)
         ).fetchone()
         if row is None or row["status"] != "failed":
-            got = "tidak ada" if row is None else f"status {row['status']}"
+            got = "does not exist" if row is None else f"is {row['status']}"
             typer.echo(
-                f"Reel {reel_id} {got}, cuma reel `failed` yang bisa di-retry.",
+                f"Reel {reel_id} {got}, only `failed` reels can be retried.",
                 err=True,
             )
             raise typer.Exit(1)
         ids = [reel_id]
     to = [db.retry(conn, i) for i in ids]
     typer.echo(
-        f"{len(ids)} reel di-retry ({to.count('queued')} ke antrian,"
-        f" {to.count('ready')} ke siap dikurasi). Jalankan `prism process`."
+        f"{len(ids)} reels retried ({to.count('queued')} queued,"
+        f" {to.count('ready')} ready to curate). Run `prism process`."
     )
 
 
 @app.command("next")
 def next_() -> None:
-    """Ambil reel `ready` berikutnya untuk dikurasi, cetak path packet.json."""
+    """Take the next `ready` reel for curation, print its packet.json path."""
     from prism import curation
 
     path = curation.next_packet(_open())
-    typer.echo(path if path else "Tidak ada reel ready.")
+    typer.echo(path if path else "No ready reels.")
 
 
 @app.command()
 def commit(
-    reel_id: str = typer.Argument(..., help="Reel `curating` yang dikurasi"),
+    reel_id: str = typer.Argument(..., help="The `curating` reel"),
     path: str | None = typer.Argument(None, help="curation.json"),
     fail: str | None = typer.Option(
-        None, "--fail", help="Tandai kurasi gagal dengan alasan ini"
+        None, "--fail", help="Mark curation as failed with this reason"
     ),
 ) -> None:
-    """Validasi & simpan hasil kurasi (atau tandai gagal dengan --fail)."""
+    """Validate & store a curation result (or mark it failed with --fail)."""
     from prism import curation
 
     if (path is None) == (fail is None):
-        typer.echo("Sebut path curation.json atau --fail (salah satu).", err=True)
+        typer.echo("Pass either a curation.json path or --fail.", err=True)
         raise typer.Exit(1)
     conn = _open()
     try:
         if fail is not None:
             curation.fail(conn, reel_id, fail)
-            typer.echo(f"{reel_id} ditandai gagal, retry otomatis balik ke ready.")
+            typer.echo(f"{reel_id} marked failed, auto-retry returns it to ready.")
             return
         r = curation.commit(conn, reel_id, Path(path))
     except (curation.CurationError, OSError) as e:
@@ -210,21 +206,21 @@ def commit(
         raise typer.Exit(1) from None
 
     if r.status == "duplicate":
-        line = f"{reel_id} duplikat dari {r.duplicate_of}"
+        line = f"{reel_id} is a duplicate of {r.duplicate_of}"
     else:
         cats = f" ({', '.join(r.categories)})" if r.categories else ""
-        line = f"{reel_id} dikurasi: {r.idea_count} ide{cats}"
+        line = f"{reel_id} curated: {r.idea_count} ideas{cats}"
     if r.proposed:
-        line += f" + usulan kategori {r.proposed}"
+        line += f" + proposed category {r.proposed}"
     typer.echo(line)
 
 
-category_app = typer.Typer(help="Kelola kategori (usulan, approve, reject).")
+category_app = typer.Typer(help="Manage categories (list, approve, reject).")
 app.add_typer(category_app, name="category")
 
 
 def _curation_call(fn, *args):
-    """Panggil fungsi curation, CurationError jadi pesan + exit 1."""
+    """Call a curation function, turning CurationError into a message + exit 1."""
     from prism import curation
 
     try:
@@ -236,11 +232,11 @@ def _curation_call(fn, *args):
 
 @category_app.command("list")
 def category_list() -> None:
-    """Daftar kategori + status + jumlah ide."""
+    """Categories with status and idea count."""
     from prism import curation
 
     for c in curation.categories(_open()):
-        line = f"  {c['slug']:<22}{c['status']:<10}{c['ideas']:>3} ide  {c['name']}"
+        line = f"  {c['slug']:<22}{c['status']:<10}{c['ideas']:>3} ideas  {c['name']}"
         if c["status"] == "proposed":
             line += f"  ({c['reason'] or '-'})"
         typer.echo(line)
@@ -248,91 +244,90 @@ def category_list() -> None:
 
 @category_app.command("approve")
 def category_approve(slug: str) -> None:
-    """Aktifkan kategori usulan."""
+    """Activate a proposed category."""
     from prism import curation
 
     _curation_call(curation.approve, _open(), slug)
-    typer.echo(f"Kategori {slug} aktif.")
+    typer.echo(f"Category {slug} is active.")
 
 
 @category_app.command("reject")
 def category_reject(slug: str) -> None:
-    """Tolak kategori usulan, ide di dalamnya jadi perlu kategori."""
+    """Reject a proposed category; its ideas become uncategorized."""
     from prism import curation
 
     n = _curation_call(curation.reject, _open(), slug)
-    typer.echo(f"Kategori {slug} ditolak, {n} ide jadi perlu kategori.")
+    typer.echo(f"Category {slug} rejected, {n} ideas now need a category.")
 
 
 @app.command()
 def recategorize(
-    idea_id: int | None = typer.Argument(None, help="Ide perlu kategori"),
-    slug: str | None = typer.Argument(None, help="Kategori core/approved tujuan"),
+    idea_id: int | None = typer.Argument(None, help="An uncategorized idea"),
+    slug: str | None = typer.Argument(None, help="Target core/approved category"),
 ) -> None:
-    """Tanpa argumen: daftar ide perlu kategori. Dengan argumen: pindahkan ide."""
+    """No arguments: list uncategorized ideas. With arguments: move an idea."""
     from prism import curation
 
     conn = _open()
     if idea_id is None:
         rows = curation.uncategorized(conn)
         if not rows:
-            typer.echo("Tidak ada ide perlu kategori.")
+            typer.echo("No uncategorized ideas.")
         for r in rows:
             typer.echo(f"  {r['id']:>4}  {r['reel_id']}  {r['title']}")
         return
     if slug is None:
         typer.echo(
-            "Sebut kategori tujuan: prism recategorize <idea_id> <slug>", err=True
+            "Name a target category: prism recategorize <idea_id> <slug>", err=True
         )
         raise typer.Exit(1)
     _curation_call(curation.recategorize, conn, idea_id, slug)
-    typer.echo(f"Ide {idea_id} pindah ke {slug}.")
+    typer.echo(f"Idea {idea_id} moved to {slug}.")
 
 
 @app.command()
 def export() -> None:
-    """Tulis reel `curated` ke Nexus (tidak menimpa catatan yang sudah diedit)."""
+    """Write `curated` reels as Markdown notes (never overwrites notes you edited)."""
     from prism import export as export_mod
 
     r = export_mod.run(_open())
     typer.echo(
-        f"{r.written} catatan baru · {r.rewritten} diperbarui · {r.unchanged} tidak berubah"
-        f" · {len(r.skipped)} dilewati"
+        f"{r.written} new notes · {r.rewritten} updated · {r.unchanged} unchanged"
+        f" · {len(r.skipped)} skipped"
     )
+    typer.echo(f"Notes: {config.settings.output_dir}")
     for reel_id, why in r.skipped:
-        typer.echo(f"  lewati {reel_id}: {why}")
+        typer.echo(f"  skip {reel_id}: {why}")
 
 
 @app.command()
 def sync() -> None:
-    """Baca status catatan Nexus (baru/dipilih/dibuang) kembali ke database."""
+    """Read each note's status (new/picked/dropped) back into the database."""
     from prism import sync as sync_mod
 
     r = sync_mod.run(_open(), config.settings.vault_dir)
     typer.echo(
-        f"{len(r.changed)} status berubah · {len(r.moved)} catatan dipindah"
-        f" · {len(r.missing)} catatan tidak ketemu · {len(r.invalid)} status tidak valid"
+        f"{len(r.changed)} status changes · {len(r.moved)} notes moved"
+        f" · {len(r.missing)} notes missing · {len(r.invalid)} invalid statuses"
     )
     for reel_id, a, b in r.changed:
         typer.echo(f"  {reel_id}: {a} -> {b}")
     for reel_id in r.missing:
-        typer.echo(f"  tidak ketemu di vault: {reel_id}", err=True)
+        typer.echo(f"  not found under vault_dir: {reel_id}", err=True)
     for reel_id, st in r.invalid:
-        typer.echo(f"  {reel_id}: status {st!r} bukan baru/dipilih/dibuang", err=True)
+        typer.echo(f"  {reel_id}: status {st!r} is not new/picked/dropped", err=True)
 
 
 @app.command()
 def status(
-    picked: bool = typer.Option(
-        False, "--picked", help="Daftar ide terpilih per kategori"
-    ),
+    picked: bool = typer.Option(False, "--picked", help="Picked ideas by category"),
 ) -> None:
-    """Ringkasan jumlah per status & kategori."""
+    """Counts per status & category."""
     if picked:
         rows = db.picked_ideas(_open())
         if not rows:
             typer.echo(
-                "Belum ada ide dipilih. Ubah `status` catatan jadi dipilih, lalu `prism sync`."
+                "Nothing picked yet. Set a note's `status` to picked, then `prism sync`."
             )
         last = None
         for r in rows:
@@ -344,14 +339,14 @@ def status(
     s = db.status_summary(_open())
 
     if s["proposed"]:
-        typer.echo("Usulan kategori menunggu keputusan:")
+        typer.echo("Proposed categories awaiting your decision:")
         for c in s["proposed"]:
             typer.echo(f"  {c['slug']} ({c['name']}): {c['reason'] or '-'}")
         typer.echo("")
 
-    typer.echo("Reel:")
+    typer.echo("Reels:")
     if not s["counts"]:
-        typer.echo("  belum ada")
+        typer.echo("  none yet")
     for st in db.STATUS_ORDER:
         n = s["counts"].get(st, 0)
         if not n:
@@ -359,11 +354,13 @@ def status(
         line = f"  {st:<13}{n}"
         if st == "failed":
             auto = s["failed_auto_retry"]
-            line += f"  ({auto} retry otomatis, {n - auto} perlu `prism retry`)"
+            line += f"  ({auto} auto-retry, {n - auto} need `prism retry`)"
         typer.echo(line)
 
-    typer.echo("\nKategori aktif:")
+    typer.echo("\nActive categories:")
     for c in s["active"]:
-        typer.echo(f"  {c['name']}: {c['ideas']} ide")
+        typer.echo(f"  {c['name']}: {c['ideas']} ideas")
     if s["uncategorized"]:
-        typer.echo(f"  ({s['uncategorized']} ide perlu kategori, `prism recategorize`)")
+        typer.echo(
+            f"  ({s['uncategorized']} ideas need a category, `prism recategorize`)"
+        )

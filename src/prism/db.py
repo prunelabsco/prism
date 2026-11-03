@@ -1,4 +1,4 @@
-"""Koneksi SQLite, migrasi, transition(), log_event(). Aturan di .docs/DATA.md."""
+"""SQLite connection, migrations, transition(), log_event(). Rules in docs/DATA.md."""
 
 import json
 import sqlite3
@@ -8,7 +8,7 @@ from prism.config import settings
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
-# reel failed dengan attempts < ini diambil ulang otomatis oleh `prism process`
+# failed reels with attempts below this are retried automatically by `prism process`
 MAX_ATTEMPTS = 3
 
 STATUS_ORDER = (
@@ -16,7 +16,7 @@ STATUS_ORDER = (
     "curating", "curated", "duplicate", "exported", "failed", "skipped",
 )  # fmt: skip
 
-# (dari, ke) -> tipe event. Pasangan di luar tabel ini = transisi tidak valid.
+# (from, to) -> event type. Any pair not in this table is an invalid transition.
 TRANSITIONS = {
     ("queued", "downloading"): "stage_started",
     ("downloading", "extracting"): "stage_started",
@@ -31,10 +31,10 @@ TRANSITIONS = {
     ("extracting", "failed"): "stage_failed",
     ("transcribing", "failed"): "stage_failed",
     ("curating", "failed"): "stage_failed",
-    ("downloading", "queued"): "stage_failed",  # rate limit, bukan gagal
+    ("downloading", "queued"): "stage_failed",  # rate limit, not a failure
     ("failed", "queued"): "reel_retried",
-    ("failed", "ready"): "reel_retried",  # gagal di curating, paket masih ada
-    ("skipped", "queued"): "reel_retried",  # post foto lama, sekarang ikut dikurasi
+    ("failed", "ready"): "reel_retried",  # failed while curating, packet still there
+    ("skipped", "queued"): "reel_retried",  # skipped photo post, now curated too
 }
 
 
@@ -49,13 +49,13 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 
 
 def migrate(conn: sqlite3.Connection) -> int:
-    """Jalankan migrasi yang belum diterapkan. Return versi skema sekarang."""
+    """Apply pending migrations. Returns the current schema version."""
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     for file in sorted(MIGRATIONS_DIR.glob("[0-9][0-9][0-9]_*.sql")):
         num = int(file.name[:3])
         if num <= version:
             continue
-        # executescript commit sendiri, jadi BEGIN/COMMIT ditulis eksplisit
+        # executescript commits on its own, so BEGIN/COMMIT are explicit
         conn.executescript(
             f"BEGIN;\n{file.read_text()}\nPRAGMA user_version = {num};\nCOMMIT;"
         )
@@ -68,17 +68,17 @@ class NotInitialized(Exception):
 
 
 def open_existing(path: Path | None = None) -> sqlite3.Connection:
-    """Untuk semua perintah selain `init`: tolak kalau DB belum ada, migrasi baru otomatis."""
+    """For every command but `init`: refuse if there is no DB, apply new migrations."""
     path = path or settings.db_path
     if not path.exists():
-        raise NotInitialized(f"Belum di-init ({path}). Jalankan `prism init`.")
+        raise NotInitialized(f"Not initialized ({path}). Run `prism init`.")
     conn = connect(path)
     migrate(conn)
     return conn
 
 
 def status_summary(conn: sqlite3.Connection) -> dict:
-    """Data mentah untuk `prism status`. Rendering di cli.py."""
+    """Raw data for `prism status`. Rendering lives in cli.py."""
     counts = dict(
         conn.execute("SELECT status, COUNT(*) FROM reels GROUP BY status").fetchall()
     )
@@ -111,7 +111,7 @@ def status_summary(conn: sqlite3.Connection) -> dict:
 def log_event(
     conn: sqlite3.Connection, type: str, reel_id: str | None = None, **payload
 ) -> None:
-    """Append-only. Caller yang commit (atau bungkus dengan `with conn`)."""
+    """Append-only. The caller commits (or wraps in `with conn`)."""
     conn.execute(
         "INSERT INTO events (reel_id, type, payload) VALUES (?, ?, ?)",
         (reel_id, type, json.dumps(payload, ensure_ascii=False)),
@@ -121,33 +121,33 @@ def log_event(
 def transition(
     conn: sqlite3.Connection, reel_id: str, to_status: str, **payload
 ) -> None:
-    """Ubah status reel + tulis satu event dalam satu transaksi.
+    """Change a reel's status + write one event, in one transaction.
 
-    Ke `failed` wajib menyertakan `error=`. Update kolom lain dari caller
-    (summary, duplicate_of, dst) yang belum di-commit ikut masuk transaksi ini.
+    Moving to `failed` requires `error=`. Uncommitted column updates by the
+    caller (summary, duplicate_of, ...) are committed in this same transaction.
     """
     row = conn.execute(
         "SELECT status, stage_error, attempts FROM reels WHERE id = ?", (reel_id,)
     ).fetchone()
     if row is None:
-        raise ValueError(f"reel {reel_id} tidak ada")
+        raise ValueError(f"reel {reel_id} does not exist")
     frm = row["status"]
     event = TRANSITIONS.get((frm, to_status))
     if event is None:
-        raise ValueError(f"transisi tidak valid: {reel_id} {frm} -> {to_status}")
+        raise ValueError(f"invalid transition: {reel_id} {frm} -> {to_status}")
 
     sets = {"status": to_status}
     if event == "stage_started":
         payload = {"stage": to_status, **payload}
     elif to_status == "failed":
         if "error" not in payload:
-            raise ValueError("transisi ke failed wajib menyertakan error=")
+            raise ValueError("a transition to failed requires error=")
         payload = {"stage": frm, **payload}
         sets["stage_error"] = f"{frm}: {payload['error']}"
     elif (frm, to_status) == ("downloading", "queued"):
         payload = {"stage": frm, "error": "rate_limited", **payload}
     elif frm == "skipped":
-        payload = {"from_stage": "skipped", **payload}  # belum pernah gagal
+        payload = {"from_stage": "skipped", **payload}  # never failed
     elif event == "reel_retried":
         sets["attempts"] = row["attempts"] + 1
         sets["stage_error"] = None
@@ -164,10 +164,10 @@ def transition(
 
 
 def retry(conn: sqlite3.Connection, reel_id: str) -> str:
-    """Reel `failed` diulang dari tahap yang gagal. Return status tujuan.
+    """Retry a `failed` reel from the stage that failed. Returns the target status.
 
-    Gagal di `curating` balik ke `ready` (paket masih ada, video sudah dihapus),
-    selain itu ke `queued`.
+    Failed in `curating` goes back to `ready` (packet kept, video already
+    deleted), anything else to `queued`.
     """
     row = conn.execute(
         "SELECT stage_error FROM reels WHERE id = ?", (reel_id,)
@@ -182,11 +182,11 @@ def retry(conn: sqlite3.Connection, reel_id: str) -> str:
 
 
 def picked_ideas(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Ide dari reel berstatus `dipilih`, urut kategori. Dasar `prism status --picked`."""
+    """Ideas from reels marked `picked`, by category. Backs `prism status --picked`."""
     return conn.execute(
-        "SELECT COALESCE(c.name, 'perlu kategori') AS category, i.reel_id, i.title,"
+        "SELECT COALESCE(c.name, 'needs category') AS category, i.reel_id, i.title,"
         " i.confidence, r.note_path FROM ideas i JOIN reels r ON r.id = i.reel_id"
         " LEFT JOIN categories c ON c.slug = i.category_slug"
-        " WHERE r.user_status = 'dipilih'"
+        " WHERE r.user_status = 'picked'"
         " ORDER BY c.sort_order IS NULL, c.sort_order, c.name, i.reel_id, i.id"
     ).fetchall()

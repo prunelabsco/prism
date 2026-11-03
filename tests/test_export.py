@@ -19,11 +19,11 @@ def dirs(tmp_path):
 
 
 def curated(conn, reels_dir, rid, note="", tags=(), ideas=1, actions=()):
-    """Reel `curated` lengkap dengan ide, evidence, event, dan curation.json."""
+    """A `curated` reel with ideas, evidence, events and curation.json."""
     with conn:
         conn.execute(
             "INSERT INTO reels (id, source, source_id, url, user_note, source_tags,"
-            " summary, card_line, status) VALUES (?, 'mymind', ?, ?, ?, ?, 'ringkas',"
+            " summary, card_line, status) VALUES (?, 'ig_export', ?, ?, ?, ?, 'summary',"
             " 'kartu', 'curated')",
             (rid, f"card_{rid}", f"https://www.instagram.com/p/{rid}/", note,
              json.dumps(list(tags))),
@@ -31,11 +31,11 @@ def curated(conn, reels_dir, rid, note="", tags=(), ideas=1, actions=()):
         for n in range(ideas):
             conn.execute(
                 "INSERT INTO ideas (reel_id, category_slug, title, detail, why_relevant,"
-                " confidence) VALUES (?, 'config-claude-code', ?, 'detail', 'relevan', 'sedang')",
+                " confidence) VALUES (?, 'learn', ?, 'detail', 'relevan', 'medium')",
                 (rid, f"Ide {rid} {n}"),
             )
         conn.execute(
-            "INSERT INTO evidence (reel_id, label, text, at_s) VALUES (?, 'terlihat', 'x', 72)",
+            "INSERT INTO evidence (reel_id, label, text, at_s) VALUES (?, 'seen', 'x', 72)",
             (rid,),
         )
         db.log_event(conn, "reel_curated", rid)
@@ -53,22 +53,20 @@ def note(inbox, rid):
 def test_export_writes_template_and_marks_exported(conn, dirs):
     inbox, reels = dirs
     curated(conn, reels, "ig_A", note="baris satu\nbaris dua: ok", tags=["ai", "tools"],
-            actions=["cek repo"])  # fmt: skip
+            actions=["check the repo"])  # fmt: skip
     r = export.run(conn, inbox, reels)
     assert (r.written, r.skipped) == (1, [])
 
     p = note(inbox, "ig_A")
     text = p.read_text()
     fm = export.read_frontmatter(text)
-    assert fm["mymind_id"] == "card_ig_A"
-    assert fm["user_note"] == "baris satu\nbaris dua: ok"  # multi-baris selamat
-    assert fm["mymind_tags"] == ["ai", "tools"]
-    assert fm["kategori"] == ["Config Claude Code"]
-    assert (fm["status"], fm["confidence"]) == ("baru", "sedang")
-    assert "- **Terlihat** (1:12): x" in text and "- [ ] cek repo" in text
-    assert text.rstrip().endswith(
-        "<!-- prism: area bebas, tidak pernah disentuh mesin -->"
-    )
+    assert fm["source_id"] == "card_ig_A"
+    assert fm["user_note"] == "baris satu\nbaris dua: ok"  # multi-line survives
+    assert fm["collections"] == ["ai", "tools"]
+    assert fm["categories"] == ["Learn"]
+    assert (fm["status"], fm["confidence"]) == ("new", "medium")
+    assert "- **Seen** (1:12): x" in text and "- [ ] check the repo" in text
+    assert text.rstrip().endswith("<!-- prism: free area, never touched by prism -->")
 
     row = conn.execute("SELECT * FROM reels WHERE id = 'ig_A'").fetchone()
     assert (row["status"], row["note_path"]) == ("exported", str(p))
@@ -80,20 +78,20 @@ def test_rerun_unchanged_and_never_overwrites_edits(conn, dirs):
     for rid in ("ig_A", "ig_B", "ig_C"):
         curated(conn, reels, rid)
     assert export.run(conn, inbox, reels).written == 3
-    assert export.run(conn, inbox, reels).unchanged == 3  # idempoten
+    assert export.run(conn, inbox, reels).unchanged == 3  # idempotent
 
     a, b = note(inbox, "ig_A"), note(inbox, "ig_B")
-    a.write_text(a.read_text().replace("status: baru", "status: dipilih"))
-    b.write_text(b.read_text() + "catatan pribadi Rakha\n")
+    a.write_text(a.read_text().replace("status: new", "status: picked"))
+    b.write_text(b.read_text() + "my own notes\n")
 
-    with conn:  # kategori berubah di DB: ig_C boleh diperbarui, A dan B tidak boleh
-        conn.execute("UPDATE ideas SET category_slug = 'ide-project'")
+    with conn:  # category changed in the DB: ig_C may be updated, A and B must not
+        conn.execute("UPDATE ideas SET category_slug = 'projects'")
     r = export.run(conn, inbox, reels)
     assert (r.rewritten, r.unchanged, len(r.skipped)) == (1, 0, 2)
-    assert dict(r.skipped) == {"ig_A": "isi sudah diedit", "ig_B": "isi sudah diedit"}
-    assert "status: dipilih" in a.read_text()
-    assert "catatan pribadi Rakha" in b.read_text()
-    assert "Ide Project" in note(inbox, "ig_C").read_text()
+    assert dict(r.skipped) == {"ig_A": "edited by you", "ig_B": "edited by you"}
+    assert "status: picked" in a.read_text()
+    assert "my own notes" in b.read_text()
+    assert "Projects" in note(inbox, "ig_C").read_text()
 
 
 def test_moved_note_skipped_and_not_recreated(conn, dirs):
@@ -111,7 +109,7 @@ def test_filename_collision_gets_reel_id_suffix(conn, dirs):
     curated(conn, reels, "ig_A")
     curated(conn, reels, "ig_B")
     with conn:
-        conn.execute("UPDATE ideas SET title = 'Sama: judul/ide?'")
+        conn.execute("UPDATE ideas SET title = 'Same: title/idea?'")
     assert export.run(conn, inbox, reels).written == 2
     names = sorted(p.name for p in inbox.glob("*.md"))
     assert len(names) == 2 and all("/" not in n and "?" not in n for n in names)
@@ -123,4 +121,4 @@ def test_zero_ideas_note_still_valid(conn, dirs):
     curated(conn, reels, "ig_A", ideas=0)
     export.run(conn, inbox, reels)
     fm = export.read_frontmatter(note(inbox, "ig_A").read_text())
-    assert fm["confidence"] is None and fm["kategori"] == []
+    assert fm["confidence"] is None and fm["categories"] == []

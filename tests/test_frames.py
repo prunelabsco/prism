@@ -11,7 +11,7 @@ def test_pick_times_no_scenes_fills_gaps():
 
 
 def test_pick_times_offset_and_merge():
-    # +0.3: 0.1->0.4 nempel ke 0, 4.8->5.1 nempel ke tengah, 6.7 & 7.1 jadi satu
+    # +0.3: 0.1->0.4 merges into 0, 4.8->5.1 into the midpoint, 6.7 & 7.1 into one
     assert frames.pick_times([0.1, 2.7, 4.8, 6.7, 7.1], 10.0, 12, 100) == [
         0.0, 3.0, 5.0, 7.0,
     ]  # fmt: skip
@@ -25,7 +25,7 @@ def test_pick_times_capped_evenly():
     scenes = [i + 0.2 for i in range(30)]  # +0.3 -> 0.5 .. 29.5
     t = frames.pick_times(scenes, 30.0, 6, 5)
     assert len(t) == 6 and 0.0 in t and 15.0 in t
-    assert t[1] == 0.5 and t[-1] == 29.5  # ujung ikut
+    assert t[1] == 0.5 and t[-1] == 29.5  # both ends kept
 
 
 def test_pick_times_fill_respects_cap():
@@ -67,7 +67,7 @@ def test_extract_real_ffmpeg(video):
          "-of", "csv=p=0", str(video / "frames" / "0001.jpg")],
         capture_output=True, text=True, check=True,
     ).stdout.strip()  # fmt: skip
-    assert probe == "360"  # tidak di-upscale ke 768
+    assert probe == "360"  # not upscaled to 768
     assert frames.is_complete(video)
 
 

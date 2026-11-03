@@ -1,4 +1,4 @@
-"""Pembungkus yt-dlp + throttle. Satu-satunya modul yang bicara ke Instagram."""
+"""yt-dlp wrapper + throttle. The only module that talks to Instagram."""
 
 import json
 import logging
@@ -13,9 +13,9 @@ from prism.config import settings
 
 log = logging.getLogger("prism.yt_dlp")
 
-# pesan yt-dlp yang berarti "post ini memang tanpa video", bukan gangguan
+# yt-dlp messages meaning "this post simply has no video", not a hiccup
 _NO_VIDEO = ("no video formats found", "there is no video in this post")
-# gangguan sementara: tidak dihitung sebagai "post tidak bisa diakses"
+# temporary trouble: not counted as "post unreachable"
 _TRANSIENT = (
     "rate-limit",
     "rate limit",
@@ -27,10 +27,10 @@ _TRANSIENT = (
 
 
 class IgError(Exception):
-    """yt-dlp gagal untuk satu post.
+    """yt-dlp failed for one post.
 
-    transient=True: rate limit/login/jaringan, coba lagi nanti.
-    False: kemungkinan post dihapus/privat. no_video: post tanpa video.
+    transient=True: rate limit/login/network, try again later.
+    False: probably deleted/private. no_video: post has no video.
     """
 
     def __init__(self, msg: str, transient: bool, no_video: bool = False):
@@ -78,9 +78,9 @@ def _entries(info: dict) -> list[dict]:
 
 
 def probe(url: str) -> bool:
-    """True kalau post berisi video (carousel: minimal satu entry punya formats).
+    """True if the post has a video (carousel: at least one entry has formats).
 
-    `process=False` supaya entry foto di carousel tidak memicu error format.
+    `process=False` so photo entries in a carousel don't raise format errors.
     """
     try:
         info = _extract(url, _opts(), process=False)
@@ -92,7 +92,7 @@ def probe(url: str) -> bool:
 
 
 def _ffprobe(video: Path) -> dict:
-    # durasi dari ffprobe: `duration` di info yt-dlp null untuk Instagram
+    # duration from ffprobe: yt-dlp's `duration` is null for Instagram
     try:
         out = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -101,7 +101,7 @@ def _ffprobe(video: Path) -> dict:
             capture_output=True, text=True, check=True,
         ).stdout  # fmt: skip
     except (OSError, subprocess.CalledProcessError) as e:
-        raise IgError(f"ffprobe gagal: {e}", transient=False) from e
+        raise IgError(f"ffprobe failed: {e}", transient=False) from e
     d = json.loads(out)
     s = d["streams"][0]
     return {
@@ -112,7 +112,7 @@ def _ffprobe(video: Path) -> dict:
 
 
 def is_complete(out_dir: Path) -> bool:
-    # post foto tidak punya video.mp4: slide langsung jadi frames.json
+    # photo posts have no video.mp4: slides go straight to frames.json
     media = (out_dir / "video.mp4").exists() or (out_dir / "frames.json").exists()
     return media and (out_dir / "meta.json").exists()
 
@@ -122,9 +122,9 @@ def _write_json(path: Path, data) -> None:
 
 
 def _fetch_photos(info: dict, out_dir: Path) -> None:
-    """Post foto: gambar terbesar tiap slide -> frames/*.jpg (lebar maks
-    `frames.width`), plus frames.json, transkrip kosong, dan meta.json.
-    Tahap frame & transkrip di `process` jadi otomatis terlewati."""
+    """Photo post: largest image per slide -> frames/*.jpg (max width
+    `frames.width`), plus frames.json, an empty transcript, and meta.json.
+    The frame & transcript stages in `process` are then skipped."""
     width = settings.frames.width
     fdir = out_dir / "frames"
     fdir.mkdir(exist_ok=True)
@@ -135,7 +135,7 @@ def _fetch_photos(info: dict, out_dir: Path) -> None:
             continue
         best = max(thumbs, key=lambda t: t.get("width") or 0)
         rel = f"frames/{i:04d}.jpg"
-        # ponytail: ffmpeg baca URL CDN langsung, tanpa klien HTTP tambahan
+        # ponytail: ffmpeg reads the CDN URL directly, no extra HTTP client
         try:
             subprocess.run(
                 ["ffmpeg", "-hide_banner", "-nostdin", "-loglevel", "error",
@@ -146,10 +146,10 @@ def _fetch_photos(info: dict, out_dir: Path) -> None:
                 capture_output=True, text=True, check=True, timeout=60,
             )  # fmt: skip
         except (OSError, subprocess.SubprocessError) as e:
-            raise IgError(f"unduh slide {i} gagal: {e}", transient=False) from e
+            raise IgError(f"slide {i} download failed: {e}", transient=False) from e
         frames.append({"path": rel, "t": None, "slide": i})
     if not frames:
-        raise IgError("post tanpa video dan tanpa gambar", transient=False)
+        raise IgError("post has neither video nor images", transient=False)
 
     first = next(e for e in _entries(info) if e)
     _write_json(
@@ -159,7 +159,7 @@ def _fetch_photos(info: dict, out_dir: Path) -> None:
     _write_json(
         out_dir / "meta.json",
         {
-            "media": "foto",
+            "media": "photo",
             "duration_s": 0,
             "width": first.get("width"),
             "height": first.get("height"),
@@ -167,20 +167,20 @@ def _fetch_photos(info: dict, out_dir: Path) -> None:
             "uploader": info.get("uploader") or info.get("channel"),
         },
     )
-    # frames.json terakhir: is_complete() menganggap download selesai setelah ini
+    # frames.json last: is_complete() treats the download as done after this
     _write_json(out_dir / "frames.json", frames)
 
 
 def fetch_video(url: str, out_dir: Path) -> None:
-    """Download ke `out_dir/video.mp4` + tulis `meta.json`. Raise IgError.
+    """Download to `out_dir/video.mp4` + write `meta.json`. Raises IgError.
 
-    Carousel campur: entry foto bikin download biasa error "no video", jadi
-    diulang dengan `playlist_items` = entry video pertama. Post tanpa video
-    sama sekali: slide diambil sebagai foto (`_fetch_photos`).
+    Mixed carousel: photo entries make a plain download fail with "no video",
+    so it is retried with `playlist_items` = the first video entry. Posts with
+    no video at all: slides are taken as photos (`_fetch_photos`).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    # res = sisi terpendek: reel vertikal 720x1280 tetap dihitung 720p.
-    # Tidak ada <=720 -> yt-dlp ambil resolusi terdekat, bukan error.
+    # res = shortest side: a vertical 720x1280 reel still counts as 720p.
+    # Nothing <=720 -> yt-dlp takes the closest resolution, not an error.
     opts = _opts(
         skip_download=False,
         format="bv*+ba/b",
@@ -194,7 +194,7 @@ def fetch_video(url: str, out_dir: Path) -> None:
         if not e.no_video:
             raise
         meta = _extract(url, _opts(), process=False)
-        # ponytail: carousel banyak video cuma ambil yang pertama, tambah kalau perlu
+        # ponytail: multi-video carousels only take the first video, extend if needed
         idx = next(
             (i for i, x in enumerate(_entries(meta), 1) if x and x.get("formats")),
             None,
@@ -206,7 +206,8 @@ def fetch_video(url: str, out_dir: Path) -> None:
 
     video = out_dir / "video.mp4"
     if not video.exists():
-        raise IgError("video.mp4 tidak terbentuk", transient=False)
+        raise IgError("video.mp4 was not created", transient=False)
+
     entry = _entries(info)[0]
     meta = {
         **_ffprobe(video),

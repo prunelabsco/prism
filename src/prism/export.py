@@ -1,4 +1,4 @@
-"""Reel `curated` -> catatan Markdown di Nexus. Template & aturan tidak-menimpa di OUTPUT.md."""
+"""`curated` reels -> Markdown notes in output_dir. Template & no-overwrite rules in docs/OUTPUT.md."""
 
 import hashlib
 import json
@@ -13,22 +13,22 @@ import yaml
 
 from prism import config, db
 
-CONFIDENCE_RANK = {"rendah": 0, "sedang": 1, "tinggi": 2}
+CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
 
 
 @dataclass
 class ExportReport:
-    written: int = 0  # catatan baru
-    rewritten: int = 0  # catatan lama yang isinya berubah (misal kategori dipindah)
+    written: int = 0  # new notes
+    rewritten: int = 0  # existing notes whose content changed (e.g. recategorized)
     unchanged: int = 0
-    skipped: list[tuple[str, str]] = field(default_factory=list)  # (reel_id, alasan)
+    skipped: list[tuple[str, str]] = field(default_factory=list)  # (reel_id, reason)
 
 
 class _Dumper(yaml.SafeDumper):
     pass
 
 
-# catatan multi-baris jadi block scalar `|`, bukan string ber-escape
+# multi-line strings become `|` block scalars, not escaped strings
 _Dumper.add_representer(
     str,
     lambda d, s: d.represent_scalar(
@@ -38,7 +38,7 @@ _Dumper.add_representer(
 
 
 def read_frontmatter(text: str) -> dict:
-    """Frontmatter YAML di awal file. Kosong kalau tidak ada atau rusak (Rakha bisa mengedit)."""
+    """YAML frontmatter at the top of a file. Empty if missing or broken (the user edits these)."""
     m = re.match(r"---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|$)", text, re.DOTALL)
     if not m:
         return {}
@@ -66,8 +66,8 @@ def render(
     next_actions: list[str],
     day: str,
 ) -> str:
-    """Isi catatan penuh. Deterministik: input sama menghasilkan teks sama."""
-    kategori = list(
+    """Full note text. Deterministic: same input, same text."""
+    categories = list(
         dict.fromkeys(i["category_name"] for i in ideas if i["category_name"])
     )
     top = max((i["confidence"] for i in ideas), key=CONFIDENCE_RANK.get, default=None)
@@ -75,13 +75,13 @@ def render(
         "prism_id": reel["id"],
         "source": reel["url"],
         "via": reel["source"],
-        "mymind_id": reel["source_id"],
+        "source_id": reel["source_id"],
         "user_note": reel["user_note"] or "",
-        "mymind_tags": json.loads(reel["source_tags"] or "[]"),
-        "kategori": kategori,
-        "status": "baru",
+        "collections": json.loads(reel["source_tags"] or "[]"),
+        "categories": categories,
+        "status": "new",
         "confidence": top,
-        "diproses": date.fromisoformat(day),
+        "processed": date.fromisoformat(day),
         "tags": ["prism"],
     }
     fm = yaml.dump(
@@ -91,36 +91,32 @@ def render(
 
     out = [
         f"---\n{fm}---\n",
-        "## Ringkasan",
+        "## Summary",
         reel["summary"] or "",
         "",
-        "## Ide yang bisa diambil",
+        "## Ideas",
     ]
     if not ideas:
-        out.append("_Tidak ada ide yang bisa diambil._")
+        out.append("_No usable ideas._")
     for n, i in enumerate(ideas, 1):
         out += [
             f"### {n}. {i['title']}",
             i["detail"],
-            f"**Kenapa relevan:** {i['why_relevant']}",
-            f"**Kategori:** {i['category_name'] or 'perlu kategori'}",
+            f"**Why it matters:** {i['why_relevant']}",
+            f"**Category:** {i['category_name'] or 'needs category'}",
             "",
         ]
-    out += ["## Bukti"]
-    labels = {
-        "terlihat": "Terlihat",
-        "dugaan": "Dugaan",
-        "tidak-diketahui": "Tidak diketahui",
-    }
+    out += ["## Evidence"]
+    labels = {"seen": "Seen", "guessed": "Guessed", "unknown": "Unknown"}
     out += [
         f"- **{labels[e['label']]}**{_mmss(e['at_s'])}: {e['text']}" for e in evidence
-    ] or ["_Tidak ada._"]
-    out += ["", "## Aksi berikutnya"]
-    out += [f"- [ ] {a}" for a in next_actions] or ["_Tidak ada._"]
+    ] or ["_None._"]
+    out += ["", "## Next actions"]
+    out += [f"- [ ] {a}" for a in next_actions] or ["_None._"]
     out += [
         "",
-        "## Catatan saya",
-        "<!-- prism: area bebas, tidak pernah disentuh mesin -->",
+        "## My notes",
+        "<!-- prism: free area, never touched by prism -->",
     ]
     return "\n".join(out) + "\n"
 
@@ -128,7 +124,7 @@ def render(
 def _filename(day: str, title: str) -> str:
     t = re.sub(r'[\\/:*?"<>|#^\[\]]', " ", title)
     t = re.sub(r"\s+", " ", t).strip(" .")[:60].strip(" .")
-    return f"{day} {t or 'catatan'}.md"
+    return f"{day} {t or 'note'}.md"
 
 
 def _write_atomic(path: Path, text: str) -> bytes:
@@ -165,30 +161,30 @@ def _gather(conn: sqlite3.Connection, reel: sqlite3.Row, reels_dir: Path):
     return ideas, evidence, actions, day
 
 
-def _blocked(path: Path, reel: sqlite3.Row, inbox: Path) -> str | None:
-    """Alasan catatan lama tidak boleh ditimpa, None kalau aman."""
+def _blocked(path: Path, reel: sqlite3.Row, out_dir: Path) -> str | None:
+    """Why an existing note must not be overwritten, None if it is safe."""
     if not path.is_file():
-        return "file tidak ada di note_path (dipindah/dihapus?), jalankan `prism sync`"
-    if path.parent != inbox:
-        return "sudah dipindah keluar inbox"
+        return "no file at note_path (moved/deleted?), run `prism sync`"
+    if path.parent != out_dir:
+        return "moved out of output_dir"
     data = path.read_bytes()
     if reel["export_hash"] is None or sha256(data) != reel["export_hash"]:
-        return "isi sudah diedit"
+        return "edited by you"
     status = read_frontmatter(data.decode("utf-8", errors="replace")).get("status")
-    if status != "baru":
+    if status != "new":
         return f"status {status}"
     return None
 
 
 def run(
     conn: sqlite3.Connection,
-    inbox: Path | None = None,
+    out_dir: Path | None = None,
     reels_dir: Path | None = None,
 ) -> ExportReport:
-    """Idempoten: jalankan ulang tidak menimpa suntingan Rakha dan tidak menduplikasi file."""
-    inbox = inbox or config.settings.output_dir
+    """Idempotent: re-running never overwrites your edits nor duplicates files."""
+    out_dir = out_dir or config.settings.output_dir
     reels_dir = reels_dir or config.settings.reels_dir
-    inbox.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     r = ExportReport()
 
     reels = conn.execute(
@@ -200,7 +196,7 @@ def run(
 
         if reel["status"] == "exported":
             path = Path(reel["note_path"] or "")
-            why = _blocked(path, reel, inbox)
+            why = _blocked(path, reel, out_dir)
             if why:
                 r.skipped.append((reel["id"], why))
             elif sha256(text.encode()) == reel["export_hash"]:
@@ -215,11 +211,12 @@ def run(
             continue
 
         title = ideas[0]["title"] if ideas else (reel["card_line"] or reel["id"])
-        path = inbox / _filename(day, title)
+        path = out_dir / _filename(day, title)
         if path.exists():
-            path = inbox / _filename(day, f"{title} {reel['id']}")
+            path = out_dir / _filename(day, f"{title} {reel['id']}")
         if path.exists():
-            r.skipped.append((reel["id"], f"{path.name} sudah ada"))
+            r.skipped.append((reel["id"], f"{path.name} already exists"))
+
             continue
         h = sha256(_write_atomic(path, text))
         with conn:

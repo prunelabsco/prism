@@ -1,4 +1,4 @@
-"""Kontrak sumber reel. Mesin hanya kenal SourceItem, tidak peduli sumbernya."""
+"""Reel source contract. The pipeline only knows SourceItem, not where it came from."""
 
 from typing import Protocol
 
@@ -13,10 +13,10 @@ class SourceItem(BaseModel):
     user_note: str | None = None
     tags: list[str] = []
     saved_at: str | None = None
-    card_type: str | None = None
 
 
 class SourceAdapter(Protocol):
     def list_new(self) -> list[SourceItem]:
-        """Semua item dari sumber. Filter video & dedup dilakukan fetch.py."""
+        """Every item in the source. Video filtering & dedup happen in fetch.py."""
+
         ...

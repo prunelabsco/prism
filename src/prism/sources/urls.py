@@ -1,4 +1,4 @@
-"""Adapter file daftar URL: satu URL per baris, baris kosong & `#` diabaikan."""
+"""URL list file: one URL per line, blank lines & `#` comments ignored."""
 
 from pathlib import Path
 
@@ -17,7 +17,8 @@ class UrlsSource:
             if not url or url.startswith("#"):
                 continue
             sc = shortcode(url)
-            # shortcode = source_id: URL sama beda query string tidak dihitung duplikat
+            # shortcode = source_id: the same URL with another query string is not a new item
+
             items.append(
                 SourceItem(source="urls", source_id=sc[1] if sc else url, url=url)
             )

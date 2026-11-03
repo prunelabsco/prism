@@ -1,10 +1,10 @@
-"""Adapter export resmi Instagram ("Download your information", Saved, JSON).
+"""Official Instagram export ("Download your information", Saved, JSON format).
 
-Format Terlihat di export asli 2026-11-02, file di `your_instagram_activity/saved/`:
+Format seen in a real export (2026-11-02), files under `your_instagram_activity/saved/`:
 - `saved_posts.json`: [{timestamp, label_values: [{label: "URL", href}, {title: "Owner", ...}]}]
 - `saved_collections.json`: [{label_values: [{label: "Name"}, {title: "Media", dict: [item]}]}],
-  item berbentuk {dict: [{label: "URL"}, {title: "Owner"}, ...]} tanpa timestamp.
-Sebagian reel hanya ada di collections (154 dari 743), jadi dua file digabung per shortcode.
+  each item {dict: [{label: "URL"}, {title: "Owner"}, ...]} without a timestamp.
+Some reels only appear in collections (154 of 743), so both files merge per shortcode.
 """
 
 import json
@@ -19,7 +19,7 @@ FILES = ("saved_posts.json", "saved_collections.json")
 
 
 def _fix(s: str) -> str:
-    """Export Meta menyimpan UTF-8 seolah latin-1 (emoji jadi `ð\\x9f...`)."""
+    """Meta's export stores UTF-8 as if it were latin-1 (emoji become `ð\\x9f...`)."""
     try:
         return s.encode("latin-1").decode("utf-8")
     except UnicodeError:
@@ -27,7 +27,7 @@ def _fix(s: str) -> str:
 
 
 def _load(path: Path) -> dict[str, list]:
-    """ZIP atau folder export -> {nama file: isi}. File yang tidak ada dilewati."""
+    """Export ZIP or folder -> {file name: content}. Missing files are skipped."""
     out = {}
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as z:
@@ -40,12 +40,12 @@ def _load(path: Path) -> dict[str, list]:
             if hit:
                 out[f] = json.loads(hit.read_text(encoding="utf-8"))
     if not out:
-        raise FileNotFoundError(f"{path}: tidak ada {' / '.join(FILES)}")
+        raise FileNotFoundError(f"{path}: no {' / '.join(FILES)} found")
     return out
 
 
 def _fields(entries: list[dict]) -> tuple[str | None, str | None]:
-    """label_values satu post -> (url, username pemilik)."""
+    """One post's label_values -> (url, owner username)."""
     url = user = None
     for e in entries:
         if e.get("label") == "URL":
@@ -70,7 +70,8 @@ class IgExportSource:
             url, user = _fields(entries)
             sc = shortcode(url or "")
             if sc is None:
-                return  # post dihapus/tanpa URL
+                return  # deleted post / no URL
+
             it = items.setdefault(
                 sc[1],
                 SourceItem(

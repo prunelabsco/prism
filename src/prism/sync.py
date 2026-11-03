@@ -1,4 +1,4 @@
-"""Nexus -> database: baca status catatan & lacak catatan yang dipindah. Hanya membaca Nexus."""
+"""Notes -> database: read each note's status & track moved notes. Only reads notes."""
 
 import re
 import sqlite3
@@ -8,7 +8,7 @@ from pathlib import Path
 from prism import db
 from prism.export import read_frontmatter
 
-STATUSES = ("baru", "dipilih", "dibuang")
+STATUSES = ("new", "picked", "dropped")
 _ID = re.compile(r"^prism_id:\s*(\S+)\s*$", re.MULTILINE)
 
 
@@ -16,14 +16,14 @@ _ID = re.compile(r"^prism_id:\s*(\S+)\s*$", re.MULTILINE)
 class SyncReport:
     changed: list[tuple[str, str, str]] = field(
         default_factory=list
-    )  # (reel, dari, ke)
+    )  # (reel, from, to)
     moved: list[str] = field(default_factory=list)
-    missing: list[str] = field(default_factory=list)  # catatan tidak ketemu di vault
-    invalid: list[tuple[str, str]] = field(default_factory=list)  # (reel, status aneh)
+    missing: list[str] = field(default_factory=list)  # note not found in vault_dir
+    invalid: list[tuple[str, str]] = field(default_factory=list)  # (reel, odd status)
 
 
 def _index_vault(vault: Path) -> dict[str, Path]:
-    """prism_id -> file, dari awal tiap .md (folder tersembunyi seperti .obsidian dilewati)."""
+    """prism_id -> file, from the head of each .md (hidden dirs like .obsidian skipped)."""
     found = {}
     for p in vault.rglob("*.md"):
         if any(part.startswith(".") for part in p.relative_to(vault).parts):
@@ -40,7 +40,8 @@ def _index_vault(vault: Path) -> dict[str, Path]:
 
 def run(conn: sqlite3.Connection, vault: Path) -> SyncReport:
     r = SyncReport()
-    index = None  # scan vault mahal, hanya kalau ada catatan yang hilang dari note_path
+    index = None  # scanning the vault is costly, only when a note left its note_path
+
     rows = conn.execute(
         "SELECT id, note_path, user_status FROM reels WHERE note_path IS NOT NULL"
         " ORDER BY id"

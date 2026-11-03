@@ -49,7 +49,7 @@ def test_drops_segments_past_video_end(reel, monkeypatch):
         "language": "en",
         "segments": [
             seg(83.3, " Now follow for more."),
-            seg(86.28, " More aid facilities now forography"),  # mulai di ujung
+            seg(86.28, " More aid facilities now forography"),  # starts at the very end
             {
                 "start": 97.4,
                 "end": 108.56,
@@ -89,7 +89,7 @@ def test_silent_video_skips_whisper(tmp_path, monkeypatch):
     assert transcribe.has_audio(tmp_path / "video.mp4") is False
 
     def never(v):
-        raise AssertionError("whisper tidak boleh dipanggil")
+        raise AssertionError("whisper must not be called")
 
     monkeypatch.setattr(transcribe, "_whisper", never)
     t = transcribe.transcribe(tmp_path)

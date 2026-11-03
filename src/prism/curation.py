@@ -1,4 +1,4 @@
-"""Loket kurasi: `next` ambil paket, `commit` simpan hasil. Aturan di CURATION.md."""
+"""Curation desk: `next` hands out a packet, `commit` stores the result. Rules in docs/CURATION.md."""
 
 import json
 import sqlite3
@@ -10,11 +10,11 @@ from pydantic import ValidationError
 from prism import config, db, packet
 from prism.models import Curation
 
-STALE = "-1 hour"  # curating lebih lama dari ini dianggap menggantung
+STALE = "-1 hour"  # `curating` for longer than this counts as abandoned
 
 
 class CurationError(ValueError):
-    """Hasil kurasi ditolak. Pesan berisi semua kesalahan, DB tidak berubah."""
+    """Curation result rejected. The message lists every error; the DB is unchanged."""
 
 
 @dataclass
@@ -27,7 +27,7 @@ class CommitResult:
 
 
 def next_packet(conn: sqlite3.Connection, reels_dir: Path | None = None) -> Path | None:
-    """Reset curating yang menggantung, lalu ambil reel ready tertua ke curating."""
+    """Reset abandoned `curating` reels, then move the oldest `ready` reel to curating."""
     reels_dir = reels_dir or config.settings.reels_dir
     for row in conn.execute(
         "SELECT id FROM reels WHERE status = 'curating'"
@@ -43,7 +43,7 @@ def next_packet(conn: sqlite3.Connection, reels_dir: Path | None = None) -> Path
         return None
     db.transition(conn, row["id"], "curating")
     path = reels_dir / row["id"] / "packet.json"
-    # packet dibangun saat process, reel lain mungkin baru dikurasi sejak itu
+    # the packet was built during process; other reels may have been curated since
     if path.exists():
         data = json.loads(path.read_text(encoding="utf-8"))
         data["recent_titles"] = packet.recent_titles(conn, row["id"])
@@ -56,11 +56,11 @@ def next_packet(conn: sqlite3.Connection, reels_dir: Path | None = None) -> Path
 def _require_curating(conn: sqlite3.Connection, reel_id: str) -> None:
     row = conn.execute("SELECT status FROM reels WHERE id = ?", (reel_id,)).fetchone()
     if row is None:
-        raise CurationError(f"reel {reel_id} tidak ada")
+        raise CurationError(f"reel {reel_id} does not exist")
     if row["status"] != "curating":
         raise CurationError(
-            f"reel {reel_id} status {row['status']}, cuma reel `curating` yang bisa"
-            " di-commit (ambil dulu lewat `prism next`)"
+            f"reel {reel_id} is {row['status']}, only `curating` reels can be"
+            " committed (take one with `prism next` first)"
         )
 
 
@@ -73,11 +73,11 @@ def _validate(conn: sqlite3.Connection, reel_id: str, text: str) -> Curation:
             f"- {'.'.join(map(str, err['loc'])) or '(root)'}: {err['msg']}"
             for err in e.errors()
         ]
-        raise CurationError("curation.json tidak valid:\n" + "\n".join(lines)) from None
+        raise CurationError("invalid curation.json:\n" + "\n".join(lines)) from None
 
     errors = []
     if c.reel_id != reel_id:
-        errors.append(f"reel_id {c.reel_id} beda dengan argumen {reel_id}")
+        errors.append(f"reel_id {c.reel_id} does not match argument {reel_id}")
     if c.duplicate_of is not None and (
         c.duplicate_of == reel_id
         or conn.execute(
@@ -85,9 +85,9 @@ def _validate(conn: sqlite3.Connection, reel_id: str, text: str) -> Curation:
         ).fetchone()
         is None
     ):
-        errors.append(f"duplicate_of {c.duplicate_of} bukan reel lain yang ada")
+        errors.append(f"duplicate_of {c.duplicate_of} is not another existing reel")
     if errors:
-        raise CurationError("curation.json tidak valid:\n- " + "\n- ".join(errors))
+        raise CurationError("invalid curation.json:\n- " + "\n- ".join(errors))
     return c
 
 
@@ -97,13 +97,13 @@ def commit(
     path: Path,
     reels_dir: Path | None = None,
 ) -> CommitResult:
-    """Validasi + tulis ideas/evidence/kategori usulan + transisi, satu transaksi."""
+    """Validate + write ideas/evidence/proposed category + transition, one transaction."""
     reels_dir = reels_dir or config.settings.reels_dir
     _require_curating(conn, reel_id)
     c = _validate(conn, reel_id, path.read_text(encoding="utf-8"))
 
     r = CommitResult(status="duplicate" if c.duplicate_of else "curated")
-    # transition() paling akhir: kalau gagal, insert sebelumnya ikut di-rollback
+    # transition() goes last: if it fails, the inserts above roll back with it
     with conn:
         if p := c.proposed_category:
             conn.execute(
@@ -147,7 +147,7 @@ def commit(
                 idea_count=r.idea_count,
             )  # fmt: skip
 
-    # next_actions tidak punya kolom DB, tempatnya di file ini (dibaca export)
+    # next_actions has no DB column, it lives in this file (read by export)
     out = reels_dir / reel_id / "curation.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(c.model_dump_json(indent=2), encoding="utf-8")
@@ -155,12 +155,12 @@ def commit(
 
 
 def fail(conn: sqlite3.Connection, reel_id: str, reason: str) -> None:
-    """Kurasi menyerah (validasi gagal berulang). Retry otomatis balikin ke ready."""
+    """Give up on curation (validation keeps failing). Auto-retry returns it to ready."""
     _require_curating(conn, reel_id)
     db.transition(conn, reel_id, "failed", error=reason[:300])
 
 
-ACTIVE = ("core", "approved")  # yang boleh dipilih recategorize
+ACTIVE = ("core", "approved")  # valid targets for recategorize
 
 
 def _proposed(conn: sqlite3.Connection, slug: str) -> None:
@@ -168,10 +168,10 @@ def _proposed(conn: sqlite3.Connection, slug: str) -> None:
         "SELECT status FROM categories WHERE slug = ?", (slug,)
     ).fetchone()
     if row is None:
-        raise CurationError(f"kategori {slug} tidak ada")
+        raise CurationError(f"category {slug} does not exist")
     if row["status"] != "proposed":
         raise CurationError(
-            f"kategori {slug} status {row['status']}, cuma usulan yang bisa diputuskan"
+            f"category {slug} is {row['status']}, only proposals can be decided"
         )
 
 
@@ -185,7 +185,7 @@ def approve(conn: sqlite3.Connection, slug: str) -> None:
 
 
 def reject(conn: sqlite3.Connection, slug: str) -> int:
-    """Tolak usulan, ide di dalamnya jadi perlu kategori. Return jumlah ide."""
+    """Reject a proposal; its ideas become uncategorized. Returns the idea count."""
     _proposed(conn, slug)
     with conn:
         conn.execute(
@@ -205,20 +205,20 @@ def uncategorized(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def recategorize(conn: sqlite3.Connection, idea_id: int, slug: str) -> None:
-    """Pindahkan ide perlu-kategori ke kategori aktif (bukan usulan)."""
+    """Move an uncategorized idea into an active (not proposed) category."""
     idea = conn.execute(
         "SELECT reel_id, category_slug FROM ideas WHERE id = ?", (idea_id,)
     ).fetchone()
     if idea is None:
-        raise CurationError(f"ide {idea_id} tidak ada")
+        raise CurationError(f"idea {idea_id} does not exist")
     if idea["category_slug"] is not None:
-        raise CurationError(f"ide {idea_id} sudah di kategori {idea['category_slug']}")
+        raise CurationError(f"idea {idea_id} is already in {idea['category_slug']}")
     cat = conn.execute(
         "SELECT status FROM categories WHERE slug = ?", (slug,)
     ).fetchone()
     if cat is None or cat["status"] not in ACTIVE:
-        got = "tidak ada" if cat is None else f"status {cat['status']}"
-        raise CurationError(f"kategori {slug} {got}, pilih kategori core/approved")
+        got = "does not exist" if cat is None else f"is {cat['status']}"
+        raise CurationError(f"category {slug} {got}, pick a core/approved category")
     with conn:
         conn.execute("UPDATE ideas SET category_slug = ? WHERE id = ?", (slug, idea_id))
         db.log_event(
@@ -227,7 +227,8 @@ def recategorize(conn: sqlite3.Connection, idea_id: int, slug: str) -> None:
 
 
 def categories(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Semua kategori + jumlah ide: usulan dulu, lalu aktif, lalu ditolak."""
+    """Every category + idea count: proposals first, then active, then rejected."""
+
     return conn.execute(
         "SELECT c.slug, c.name, c.status, c.reason, COUNT(i.id) AS ideas"
         " FROM categories c LEFT JOIN ideas i ON i.category_slug = c.slug"

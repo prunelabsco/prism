@@ -15,7 +15,7 @@ class FakeYDL:
     """Satu skenario per test: `calls` mencatat (download, process, playlist_items)."""
 
     calls: list
-    carousel: list | None = None  # None = reel tunggal
+    carousel: list | None = None  # None = single reel
     error: str | None = None
 
     def __init__(self, opts):
@@ -90,15 +90,15 @@ def test_photo_carousel_slides_become_frames(ydl, tmp_path, monkeypatch):
     monkeypatch.setattr(download.subprocess, "run", fake_ffmpeg)
     out = tmp_path / "r"
     download.fetch_video(URL, out)
-    assert urls == ["big1", "big2"]  # gambar terbesar tiap slide
-    assert ydl.calls == [(True, True, None), (False, False, None)]  # tanpa hit ekstra
+    assert urls == ["big1", "big2"]  # largest image per slide
+    assert ydl.calls == [(True, True, None), (False, False, None)]  # no extra request
     assert download.is_complete(out)
     frames = json.loads((out / "frames.json").read_text())
     assert frames == [
         {"path": "frames/0001.jpg", "t": None, "slide": 1},
         {"path": "frames/0002.jpg", "t": None, "slide": 2},
     ]
-    assert json.loads((out / "meta.json").read_text())["media"] == "foto"
+    assert json.loads((out / "meta.json").read_text())["media"] == "photo"
     assert json.loads((out / "transcript.json").read_text())["has_speech"] is False
 
 
