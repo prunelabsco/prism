@@ -25,7 +25,12 @@ You don't need a Prism account, a server, or an API key for Prism. Transcription
 
 **About the cookies:** you never type a password into Prism. You only name your browser in the config, and yt-dlp reads its Instagram cookies on your machine, only during `prism process`. Prism uses them to talk to Instagram and nothing else. Curation and export don't touch Instagram at all.
 
-## Setup (about 10 minutes, plus waiting for Instagram)
+## Setup
+
+The hands-on part is roughly 10 minutes, depending on your machine and connection.
+
+> [!IMPORTANT]
+> **Instagram's wait is separate.** Meta prepares your export on its own schedule, which can take from minutes to a few days. [Request it](#get-your-instagram-export) before anything else.
 
 ### Let your agent do it
 
