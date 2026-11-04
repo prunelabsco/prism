@@ -85,11 +85,13 @@ Do this first: Meta needs time to prepare the file, and you can do everything el
 1. In Instagram, open your profile → menu → **Accounts Center**.
 2. Go to **Your information and permissions**.
 3. Choose **Export your information** (some versions say **Download your information**), then create an export.
-4. Pick your Instagram account, then **Export to device**.
-5. Under the information to include, choose only **Saved**.
-6. Set **Format: JSON** (not HTML) and **Date range: All time**.
-7. Start the export. Instagram may ask for your password; that goes to Instagram, never to Prism.
-8. Meta emails you when it's ready, which can take up to a few days. Download the ZIP from the link.
+4. Pick your Instagram account, then **Export to device**. A **Confirm your export** form opens.
+5. **Important:** open **Customize information** and choose only **Saved**.
+6. **Date range:** **All time** gets every saved reel but takes longer to prepare. If you only want recent saves, pick a shorter range (last week, month, 3 months, 6 months, year, 3 years, or custom).
+7. **Format: JSON**, not HTML. Prism can only read JSON.
+8. **Media quality:** anything works. Medium is plenty, since Prism only needs the links.
+9. Start the export. Instagram may ask for your password; that goes to Instagram, never to Prism.
+10. Meta emails you when it's ready, which can take up to a few days. Download the ZIP from the link.
 
 You don't need to unzip it. Prism reads these two files inside:
 
