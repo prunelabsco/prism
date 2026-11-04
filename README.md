@@ -2,7 +2,7 @@
 
 You save hundreds of Instagram reels "for later". Prism turns them into notes you can actually use: one Markdown note per reel, with the ideas worth taking, sorted into categories, and every claim labeled **seen**, **guessed** or **unknown**.
 
-It runs entirely on your machine with your own AI agent (Claude Code, Codex, OpenCode, Gemini CLI, Cursor...). No server, no account, nothing uploaded.
+It runs on your machine with your own AI agent (Claude Code, Codex, OpenCode, Gemini CLI, Cursor...). No server, no account. Prism uploads nothing; curation goes through your agent.
 
 <picture>
   <source media="(max-width: 600px)" srcset="assets/workflow-narrow.png">
@@ -229,4 +229,4 @@ Rules:
 
 ## License
 
-[MIT](LICENSE)
+The code is [MIT](LICENSE). The Prune Labs name and Buddy logo are not covered.
