@@ -1,12 +1,15 @@
 """`prism doctor`: check every local prerequisite, say how to fix what's missing.
 
-Only reads local state (PATH, installed packages, browser cookie store, folders).
-Never talks to Instagram.
+Reads local state (PATH, installed packages, browser cookie store, folders), plus
+one anonymous request to see if instagram.com answers on this network.
 """
 
+import http.client
 import importlib.util
 import os
 import shutil
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 
 from prism import config, transcribe
@@ -66,6 +69,23 @@ def _cookies() -> Check:
     return Check("instagram login", True, label)
 
 
+def _reachable() -> Check:
+    name = "network"
+    try:
+        # no cookies: this only tests the network, never the account
+        urllib.request.urlopen("https://www.instagram.com/", timeout=15).close()
+    except urllib.error.HTTPError:
+        pass  # any HTTP answer means it is reachable
+    except (OSError, http.client.HTTPException) as e:
+        return Check(
+            name,
+            False,
+            f"no answer from instagram.com ({e}). `prism process` will stop on"
+            " timeouts. Wait, or try another network (e.g. a phone hotspot)",
+        )
+    return Check(name, True, "instagram.com answers")
+
+
 def _output_dir() -> Check:
     out = config.settings.output_dir
     parent = next((p for p in (out, *out.parents) if p.exists()), None)
@@ -82,4 +102,4 @@ def _db() -> Check:
 
 
 def run() -> list[Check]:
-    return [*_ffmpeg(), _transcriber(), _cookies(), _output_dir(), _db()]
+    return [*_ffmpeg(), _transcriber(), _cookies(), _reachable(), _output_dir(), _db()]

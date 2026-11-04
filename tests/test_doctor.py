@@ -1,3 +1,6 @@
+import urllib.error
+import urllib.request
+
 from prism import config, doctor
 
 
@@ -37,3 +40,17 @@ def test_output_dir_and_db(monkeypatch, tmp_path):
     with_browser(monkeypatch, tmp_path, None)
     assert doctor._output_dir().ok  # missing but creatable
     assert not doctor._db().ok
+
+
+def test_reachable(monkeypatch):
+    def answer(*a, **k):
+        raise urllib.error.HTTPError("u", 429, "Too Many", None, None)
+
+    def silent(*a, **k):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(urllib.request, "urlopen", answer)
+    assert doctor._reachable().ok  # any HTTP answer counts
+    monkeypatch.setattr(urllib.request, "urlopen", silent)
+    c = doctor._reachable()
+    assert not c.ok and "another network" in c.detail

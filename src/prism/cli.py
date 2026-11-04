@@ -65,7 +65,7 @@ def init() -> None:
 
 @app.command()
 def doctor() -> None:
-    """Check ffmpeg, transcription, Instagram login, folders. Fix hints for each."""
+    """Check ffmpeg, transcription, Instagram login and network, folders."""
     from prism import doctor as doctor_mod
 
     checks = doctor_mod.run()
