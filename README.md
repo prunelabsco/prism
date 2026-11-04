@@ -1,14 +1,13 @@
-# Prism
+# Prism <picture><source media="(prefers-color-scheme: dark)" srcset="assets/buddy-dark.svg"><img src="assets/buddy.svg" height="40" alt="Buddy, the Prune Labs mascot"></picture>
 
 You save hundreds of Instagram reels "for later". Prism turns them into notes you can actually use: one Markdown note per reel, with the ideas worth taking, sorted into categories, and every claim labeled **seen**, **guessed** or **unknown**.
 
 It runs entirely on your machine with your own AI agent (Claude Code, Codex, OpenCode, Gemini CLI, Cursor...). No server, no account, nothing uploaded.
 
-```
-Instagram export ──> prism fetch ──> prism process ──> your agent curates ──> prism export
-  (your saved          queue          download, frames,     looks at frames,       Markdown notes
-   reels + collections)                transcript (local)    writes ideas           in a folder
-```
+<picture>
+  <source media="(max-width: 600px)" srcset="assets/workflow-narrow.png">
+  <img src="assets/workflow.png" width="100%" alt="How Prism works: your Instagram export goes through prism fetch, which queues every reel, then prism process, which downloads, cuts frames and transcribes on your machine. Your agent curates by looking at every frame and labeling every claim seen, guessed or unknown. prism export writes one Markdown note per reel.">
+</picture>
 
 ## What you need
 
