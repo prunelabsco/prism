@@ -157,7 +157,11 @@ Spaghetti cooked directly in stock with garlic and butter, lemon zest at the end
 <!-- prism: free area, never touched by prism -->
 ```
 
-Change `status: new` to `picked` or `dropped` as you go through them, then `prism sync` and `prism status --picked` gives you the shortlist by category. Prism never overwrites a note you edited. Notes work great in an [Obsidian](https://obsidian.md) vault: point `output_dir` inside it and set `vault_dir` so moved notes are still tracked.
+Change `status: new` to `picked` or `dropped` as you go through them, then `prism sync` and `prism status --picked` gives you the shortlist by category. Prism never overwrites a note you edited.
+
+**Where your notes go:** plain Markdown files in `~/Documents/Prism`. You don't need any special app, any text editor opens them. Change the folder with `output_dir` in `~/.prism/config.toml`.
+
+Using [Obsidian](https://obsidian.md)? Optional: point `output_dir` inside your vault and set `vault_dir`, so moved notes are still tracked.
 
 ## Categories
 
