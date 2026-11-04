@@ -43,10 +43,12 @@ def next_packet(conn: sqlite3.Connection, reels_dir: Path | None = None) -> Path
         return None
     db.transition(conn, row["id"], "curating")
     path = reels_dir / row["id"] / "packet.json"
-    # the packet was built during process; other reels may have been curated since
+    # the packet was built during process; other reels may have been curated
+    # (and categories proposed) since
     if path.exists():
         data = json.loads(path.read_text(encoding="utf-8"))
         data["recent_titles"] = packet.recent_titles(conn, row["id"])
+        data["categories"] = packet.categories(conn)
         path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )

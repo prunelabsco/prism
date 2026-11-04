@@ -65,7 +65,7 @@ def init() -> None:
 
 @app.command()
 def doctor() -> None:
-    """Check ffmpeg, transcription, Instagram login, folders. Fix hints for each."""
+    """Check ffmpeg, transcription, Instagram login and network, folders."""
     from prism import doctor as doctor_mod
 
     checks = doctor_mod.run()
@@ -130,11 +130,11 @@ def process(
         f"{r.downloaded} downloaded · {r.cached} cached"
         f" · {r.extracted} frame sets · {r.transcribed} transcribed"
         f" · {r.ready} ready to curate"
-        f" · {r.rate_limited} rate limited (requeued) · {r.failed} failed"
+        f" · {r.transient} temporary errors (requeued) · {r.failed} failed"
         f" · {r.retried} auto-retried"
     )
     if r.stopped:
-        typer.echo(f"Downloads stopped (rate limit/login twice): {r.stopped}", err=True)
+        typer.echo(f"Downloads stopped: {r.stopped}", err=True)
 
 
 @app.command()

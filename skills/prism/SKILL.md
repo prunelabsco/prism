@@ -32,6 +32,7 @@ prism status
 
 - `process` downloads at most `max_per_run` reels per run, throttled on purpose. Instagram rate-limits aggressive downloading and may lock the account. Don't loop `process` back to back or in parallel; suggest a few runs spread over the day for big backlogs.
 - If `process` reports it stopped on rate limit / login, stop and tell the user. Don't retry immediately.
+- If it reports Instagram isn't responding on this network, tell the user to try another network (a phone hotspot works) or wait. `prism doctor` checks this too.
 - `prism fetch` again picks up `/p/` posts it deferred.
 
 ## 3. Curate (repeat N times, default 5)

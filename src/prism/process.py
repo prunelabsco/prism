@@ -29,7 +29,7 @@ class ProcessReport:
     retried: int = 0  # failed -> queued automatically
     downloaded: int = 0
     cached: int = 0  # video.mp4 + meta.json already there
-    rate_limited: int = 0  # back to queued
+    transient: int = 0  # rate limit/login/network, back to queued
     extracted: int = 0  # frames extracted this run
     transcribed: int = 0
     ready: int = 0  # packet built, ready to curate
@@ -100,10 +100,10 @@ def run(
                     log.warning("download %s failed: %s", reel_id, e)
                     if e.transient:
                         db.transition(conn, reel_id, "queued")
-                        r.rate_limited += 1
+                        r.transient += 1
                         fails += 1
                         if fails >= 2:
-                            r.stopped = str(e)
+                            r.stopped = download.stop_reason(e)
                     else:
                         db.transition(conn, reel_id, "failed", error=str(e)[:300])
                         r.failed += 1

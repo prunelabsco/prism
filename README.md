@@ -77,6 +77,8 @@ Already have a list of reel URLs instead of an export? `prism fetch urls.txt --s
 
 `prism process` downloads at most 30 reels per run, a few seconds apart. Instagram rate-limits heavy downloading and can temporarily lock accounts. For a big backlog, run it a few times spread over the day, not in a loop. If it says it stopped on rate limit or login, wait.
 
+If it stops because Instagram isn't responding, that's the network, even when instagram.com opens fine in your browser. We've seen one network time out for yt-dlp while a phone hotspot worked. Try another network, or wait.
+
 ## What a note looks like
 
 ```markdown

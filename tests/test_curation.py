@@ -280,3 +280,17 @@ def test_next_refreshes_recent_titles(conn, tmp_path):
     (d / "packet.json").write_text(json.dumps({"reel_id": "ig_A", "recent_titles": []}))
     path = curation.next_packet(conn, tmp_path)
     assert json.loads(path.read_text())["recent_titles"][0]["reel_id"] == "ig_B"
+
+
+def test_next_refreshes_categories(conn, tmp_path):
+    add(conn, "ig_A")
+    conn.execute(
+        "INSERT INTO categories (slug, name, description, status)"
+        " VALUES ('home-decor', 'Home decor', 'Decor ideas', 'proposed')"
+    )
+    d = tmp_path / "ig_A"
+    d.mkdir()
+    (d / "packet.json").write_text(json.dumps({"reel_id": "ig_A", "categories": []}))
+    path = curation.next_packet(conn, tmp_path)
+    slugs = [c["slug"] for c in json.loads(path.read_text())["categories"]]
+    assert "home-decor" in slugs

@@ -22,6 +22,16 @@ def recent_titles(conn: sqlite3.Connection, reel_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def categories(conn: sqlite3.Connection) -> list[dict]:
+    # proposed included so the agent reuses a pending proposal instead of a twin
+    rows = conn.execute(
+        "SELECT slug, name, status, description FROM categories"
+        " WHERE status IN ('core', 'approved', 'proposed')"
+        " ORDER BY status = 'proposed', sort_order, name"
+    ).fetchall()
+    return [dict(c) for c in rows]
+
+
 def build(conn: sqlite3.Connection, reel_id: str, out_dir: Path) -> dict:
     """Merge reel row + meta/frames/transcript + categories, write packet.json."""
     reel = conn.execute(
@@ -33,12 +43,6 @@ def build(conn: sqlite3.Connection, reel_id: str, out_dir: Path) -> dict:
     meta = _read(out_dir, "meta.json")
     transcript = _read(out_dir, "transcript.json")
 
-    # proposed included so the agent reuses a pending proposal instead of a twin
-    categories = conn.execute(
-        "SELECT slug, name, status, description FROM categories"
-        " WHERE status IN ('core', 'approved', 'proposed')"
-        " ORDER BY status = 'proposed', sort_order, name"
-    ).fetchall()
     packet = {
         "reel_id": reel["id"],
         "source": reel["source"],
@@ -53,7 +57,7 @@ def build(conn: sqlite3.Connection, reel_id: str, out_dir: Path) -> dict:
         "has_speech": transcript["has_speech"],
         "transcript": transcript["segments"],
         "frames": _read(out_dir, "frames.json"),
-        "categories": [dict(c) for c in categories],
+        "categories": categories(conn),
         "recent_titles": recent_titles(conn, reel_id),
     }
     (out_dir / "packet.json").write_text(
