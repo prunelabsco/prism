@@ -10,20 +10,21 @@ Instagram export ──> prism fetch ──> prism process ──> your agent cu
    reels + collections)                transcript (local)    writes ideas           in a folder
 ```
 
-## Why the labels
+## What you need
 
-Reels are full of confident claims. Prism's curation rules make the agent separate what it actually **saw** in a frame or heard in the transcript (with the timestamp) from what it **guessed**, and what the reel never shows (**unknown**, like "recipe only sent by DM"). You can trust a note at a glance.
+| | What it's for | Cost |
+|---|---|---|
+| **Your Instagram export** (ZIP) | The list of reels you saved, plus your collection names. | Free |
+| **A browser logged in to Instagram** | `prism process` uses its cookies to download reels as you. | Free |
+| **Python 3.12 + [uv](https://docs.astral.sh/uv/)** | Installs and runs the CLI. | Free |
+| **[ffmpeg](https://ffmpeg.org/download.html)** | Cuts frames and extracts audio (`brew install ffmpeg`, `winget install ffmpeg`, `apt install ffmpeg`). | Free |
+| **An AI coding agent that can read images** | Does the curation: looks at frames, writes the ideas. Claude Code, Codex, OpenCode, Gemini CLI, Cursor... Text-only models won't work. | Your agent's normal quota or API pricing |
+| **A network that can reach Instagram** | Downloads time out on some networks, even when instagram.com opens in your browser. `prism doctor` checks this. | - |
+| **About 1.6 GB of disk** | The whisper model, downloaded once on first run. | Free |
 
-## Requirements
+You don't need a Prism account, a server, or an API key for Prism. Transcription runs locally and installs with the CLI: [mlx-whisper](https://github.com/ml-explore/mlx-examples) on Apple Silicon, [faster-whisper](https://github.com/SYSTRAN/faster-whisper) everywhere else.
 
-| | |
-|---|---|
-| Python 3.12 + [uv](https://docs.astral.sh/uv/) | installs and runs the CLI |
-| [ffmpeg](https://ffmpeg.org/download.html) | frames and audio (`brew install ffmpeg`, `winget install ffmpeg`, `apt install ffmpeg`) |
-| An AI coding agent **that can read images** | does the curation. Text-only models can't see the frames. |
-| A browser logged in to Instagram | yt-dlp reads its cookies locally to download your saved reels |
-
-Transcription is local and installed automatically: [mlx-whisper](https://github.com/ml-explore/mlx-examples) on Apple Silicon, [faster-whisper](https://github.com/SYSTRAN/faster-whisper) everywhere else. The first run downloads the whisper model (~1.6 GB).
+**About the cookies:** you never type a password into Prism. You only name your browser in the config, and yt-dlp reads its Instagram cookies on your machine, only during `prism process`. Prism uses them to talk to Instagram and nothing else. Curation and export don't touch Instagram at all.
 
 ## Setup (about 10 minutes, plus waiting for Instagram)
 
@@ -78,6 +79,10 @@ Already have a list of reel URLs instead of an export? `prism fetch urls.txt --s
 `prism process` downloads at most 30 reels per run, a few seconds apart. Instagram rate-limits heavy downloading and can temporarily lock accounts. For a big backlog, run it a few times spread over the day, not in a loop. If it says it stopped on rate limit or login, wait.
 
 If it stops because Instagram isn't responding, that's the network, even when instagram.com opens fine in your browser. We've seen one network time out for yt-dlp while a phone hotspot worked. Try another network, or wait.
+
+## Why the labels
+
+Reels are full of confident claims. Prism's curation rules make the agent separate what it actually **saw** in a frame or heard in the transcript (with the timestamp) from what it **guessed**, and what the reel never shows (**unknown**, like "recipe only sent by DM"). You can trust a note at a glance.
 
 ## What a note looks like
 
