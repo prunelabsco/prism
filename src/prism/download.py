@@ -39,6 +39,14 @@ class IgError(Exception):
         self.no_video = no_video
 
 
+def stop_reason(e: IgError) -> str:
+    """Why a run stopped. A timeout is the network, not a limit on the account."""
+    low = str(e).lower()
+    if "timed out" in low or "connection" in low:
+        return f"Instagram is not responding on this network, wait or try another: {e}"
+    return f"rate limit or login, wait before trying again: {e}"
+
+
 def throttle() -> None:
     d = settings.download
     time.sleep(random.uniform(d.throttle_min_s, d.throttle_max_s))

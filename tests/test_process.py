@@ -84,11 +84,18 @@ def test_download_ok_and_limit(conn, tmp_path):
     assert f2.calls == ["c"] and r.extracted == 1
 
 
+def test_timeout_is_reported_as_network_not_rate_limit(conn, tmp_path):
+    add(conn, "a", "b")
+    err = download.IgError("Read timed out. (read timeout=20.0)", transient=True)
+    r = run(conn, tmp_path, FakeFetch({"a": err, "b": err}))
+    assert "network" in r.stopped and "rate limit" not in r.stopped
+
+
 def test_stops_after_two_rate_limits(conn, tmp_path):
     add(conn, "a", "b", "c")
     rl = download.IgError("rate-limit reached", transient=True)
     r = run(conn, tmp_path, FakeFetch({"a": rl, "b": rl}))
-    assert r.rate_limited == 2 and r.stopped
+    assert r.transient == 2 and "rate limit" in r.stopped
     assert statuses(conn) == {"a": "queued", "b": "queued", "c": "queued"}
     a = conn.execute("SELECT attempts FROM reels WHERE id = 'a'").fetchone()[0]
     assert a == 0
