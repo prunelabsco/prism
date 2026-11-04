@@ -14,7 +14,7 @@ Instagram export ──> prism fetch ──> prism process ──> your agent cu
 
 | | What it's for | Cost |
 |---|---|---|
-| **Your Instagram export** (ZIP) | The list of reels you saved, plus your collection names. | Free |
+| **[Your Instagram export](#get-your-instagram-export)** (ZIP) | The list of reels you saved, plus your collection names. Meta needs time to prepare it, so request it first. | Free |
 | **A browser logged in to Instagram** | `prism process` uses its cookies to download reels as you. | Free |
 | **Python 3.12 + [uv](https://docs.astral.sh/uv/)** | Installs and runs the CLI. | Free |
 | **[ffmpeg](https://ffmpeg.org/download.html)** | Cuts frames and extracts audio (`brew install ffmpeg`, `winget install ffmpeg`, `apt install ffmpeg`). | Free |
@@ -28,8 +28,7 @@ You don't need a Prism account, a server, or an API key for Prism. Transcription
 
 ## Setup (about 10 minutes, plus waiting for Instagram)
 
-**1. Request your Instagram export** (do this first, Meta can take a while):
-Instagram → Accounts Center → Your information and permissions → Download your information → Download or transfer information → your account → Some of your information → **Saved** → Download to device → Format **JSON**, date range **All time** → Create files. Meta emails you a download link.
+**1. [Request your Instagram export](#get-your-instagram-export)** first, since Meta needs time to prepare it.
 
 **2. Install the CLI and the agent skill:**
 
@@ -58,6 +57,26 @@ browser = "chrome"           # chrome, brave, firefox, edge, safari, ...
 ```
 
 Run `prism doctor` again until everything says `ok`. Then write a few lines about yourself in `~/.prism/profile.md`. The agent uses it to judge what's useful **to you**. (Or just ask your agent to set Prism up; the skill walks it through all of this.)
+
+## Get your Instagram export
+
+Do this first: Meta needs time to prepare the file, and you can do everything else while you wait.
+
+1. In Instagram, open your profile → menu → **Accounts Center**.
+2. Go to **Your information and permissions**.
+3. Choose **Export your information** (some versions say **Download your information**), then create an export.
+4. Pick your Instagram account, then **Export to device**.
+5. Under the information to include, choose only **Saved**.
+6. Set **Format: JSON** (not HTML) and **Date range: All time**.
+7. Start the export. Instagram may ask for your password; that goes to Instagram, never to Prism.
+8. Meta emails you when it's ready, which can take up to a few days. Download the ZIP from the link.
+
+You don't need to unzip it. Prism reads these two files inside:
+
+```
+your_instagram_activity/saved/saved_posts.json
+your_instagram_activity/saved/saved_collections.json
+```
 
 ## Using it
 
