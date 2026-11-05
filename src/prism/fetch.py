@@ -106,6 +106,7 @@ def run(
     max_probes: int | None = None,
     probe: Callable[[str], bool] = download.probe,
     throttle: Callable[[], None] = download.throttle,
+    progress: Callable[[str], None] = lambda _: None,
 ) -> FetchReport:
     """Idempotent: re-running adds no duplicate reels or events."""
     if max_probes is None:
@@ -113,7 +114,12 @@ def run(
     r = FetchReport()
     probes = fails = 0
 
-    for item in adapter.list_new():
+    items = list(adapter.list_new())
+    progress(
+        f"{len(items)} saved items. Reels queue instantly; up to {max_probes} posts"
+        " are checked for video, a few seconds each. This can take minutes."
+    )
+    for item in items:
         sc = shortcode(item.url)
         if sc is None:
             r.not_instagram += 1
@@ -146,6 +152,7 @@ def run(
         if probes:
             throttle()
         probes += 1
+        progress(f"checking post {probes}/{max_probes}: {reel_id}")
         try:
             has_video = probe(canonical_url(code))
         except download.IgError as e:

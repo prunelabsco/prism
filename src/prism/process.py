@@ -47,6 +47,7 @@ def run(
     build_packet: Callable[[sqlite3.Connection, str, Path], object] = packet.build,
     keep_video: bool | None = None,
     reels_dir: Path | None = None,
+    progress: Callable[[str], None] = lambda _: None,
 ) -> ProcessReport:
     """Safe to re-run: reels stuck mid-stage are picked up again.
 
@@ -78,6 +79,9 @@ def run(
         " WHERE status IN ('transcribing', 'extracting', 'downloading', 'queued')"
         " ORDER BY status = 'queued', created_at, id"
     ).fetchall()
+    to_download = min(
+        cap, sum(row["status"] in ("queued", "downloading") for row in rows)
+    )
     attempts = fails = empty = 0
     for row in rows:
         reel_id, status, out = row["id"], row["status"], reels_dir / row["id"]
@@ -91,6 +95,7 @@ def run(
                 if attempts:
                     throttle()
                 attempts += 1
+                progress(f"{reel_id}: downloading ({attempts}/{to_download})")
                 if status == "queued":
                     db.transition(conn, reel_id, "downloading")
                     status = "downloading"
@@ -101,12 +106,14 @@ def run(
                     if e.transient:
                         db.transition(conn, reel_id, "queued")
                         r.transient += 1
+                        progress(f"{reel_id}: temporary error, back in the queue")
                         fails += 1
                         if fails >= 2:
                             r.stopped = download.stop_reason(e)
                     else:
                         db.transition(conn, reel_id, "failed", error=str(e)[:300])
                         r.failed += 1
+                        progress(f"{reel_id}: download failed")
                         # "empty media" = dead post OR not logged in to Instagram:
                         # still failed, but twice in a row stops the run
                         empty = empty + 1 if EMPTY_MEDIA in str(e).lower() else 0
@@ -128,12 +135,14 @@ def run(
                 status = stage
             if is_complete(out):
                 continue
+            progress(f"{reel_id}: {stage}")
             try:
                 fn(out)
             except STAGE_ERRORS as e:
                 log.warning("%s %s failed: %s", stage, reel_id, e)
                 db.transition(conn, reel_id, "failed", error=str(e)[:300])
                 r.failed += 1
+                progress(f"{reel_id}: {stage} failed")
                 break
             setattr(r, field, getattr(r, field) + 1)
         else:
@@ -143,9 +152,11 @@ def run(
                 log.warning("packet %s failed: %s", reel_id, e)
                 db.transition(conn, reel_id, "failed", error=str(e)[:300])
                 r.failed += 1
+                progress(f"{reel_id}: packet failed")
                 continue
             db.transition(conn, reel_id, "ready")
             r.ready += 1
+            progress(f"{reel_id}: ready")
             # only after ready: a crash before this never loses an unfinished reel's video
 
             if not keep_video:

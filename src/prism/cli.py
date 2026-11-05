@@ -27,6 +27,11 @@ def _log_to_file() -> None:
     logger.propagate = False
 
 
+def _progress(message: str) -> None:
+    # stderr: stdout keeps only the final summary
+    typer.echo(message, err=True)
+
+
 def _open() -> sqlite3.Connection:
     try:
         conn = db.open_existing(config.settings.db_path)
@@ -97,7 +102,7 @@ def fetch(
         raise typer.BadParameter("choose ig-export or urls", param_hint="--source")
     adapter = UrlsSource(file) if source == "urls" else IgExportSource(file)
     try:
-        r = fetch_mod.run(_open(), adapter, limit=limit)
+        r = fetch_mod.run(_open(), adapter, limit=limit, progress=_progress)
     except (FileNotFoundError, ValueError) as e:  # broken / not an Instagram export
         typer.echo(str(e), err=True)
         raise typer.Exit(1) from None
@@ -125,7 +130,7 @@ def process(
     """Run the queue: download, extract frames, transcribe, build packets."""
     from prism import process as process_mod
 
-    r = process_mod.run(_open(), limit=limit)
+    r = process_mod.run(_open(), limit=limit, progress=_progress)
     typer.echo(
         f"{r.downloaded} downloaded · {r.cached} cached"
         f" · {r.extracted} frame sets · {r.transcribed} transcribed"

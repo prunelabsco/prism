@@ -252,3 +252,20 @@ def test_urls_file_skips_comments_and_dedups_by_shortcode(conn, tmp_path):
     r = run(conn, items)
     assert (r.new_reel, r.existing, r.not_instagram) == (1, 1, 1)
     assert rows(conn) == {"ig_AAA": ("queued", "https://www.instagram.com/p/AAA/")}
+
+
+def test_progress_reports_total_and_each_probe(conn):
+    lines = []
+    run(
+        conn,
+        [
+            item("a", "https://www.instagram.com/reel/A1/"),
+            item("b", "https://www.instagram.com/p/B1/"),
+        ],
+        FakeProbe({"B1": True}),
+        progress=lines.append,
+    )
+    assert lines[0].startswith("2 saved items.")
+    assert lines[1].startswith("checking post 1/")
+    assert "ig_B1" in lines[1]
+    assert len(lines) == 2  # reels queue silently, only slow steps report
