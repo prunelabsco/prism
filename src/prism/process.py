@@ -104,7 +104,9 @@ def run(
                 except download.IgError as e:
                     log.warning("download %s failed: %s", reel_id, e)
                     if e.transient:
-                        db.transition(conn, reel_id, "queued")
+                        db.transition(
+                            conn, reel_id, "queued", error=download.error_kind(e)
+                        )
                         r.transient += 1
                         progress(f"{reel_id}: temporary error, back in the queue")
                         fails += 1
