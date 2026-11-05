@@ -4,7 +4,8 @@
 
 - **Context is the user's profile** (`~/.prism/profile.md`, or `$PRISM_HOME/profile.md`). Ideas must be useful to *this* person, not generic.
 - **`user_note` is the strongest signal** of why they saved the reel, when present.
-- **`collections` (Instagram collection names) are a topic hint, not a category.** Names are often terse (`d1`, `food🍴`). Use them to understand why it was saved; the category still comes from the content. A collection name is never evidence.
+- **`collection_categories` is the user's own sorting.** When it isn't empty, put each idea in one of those categories, whichever fits best. Use another category only when the idea plainly has nothing to do with them.
+- **`collections` (Instagram collection names) are a topic hint.** Names are often terse (`d1`, `food🍴`). Use them to understand why it was saved. With no `collection_categories`, the category comes from the content. A collection name is never evidence, whichever category it leads to.
 - A reel yields 0 to 4 ideas. Zero is valid when nothing is usable: still curate it with `ideas: []` and a `summary`.
 - One idea goes in exactly one category. One reel may have ideas in several categories.
 - Be skeptical of marketing claims and tools whose mechanism isn't shown. Label those `guessed` or `unknown`.

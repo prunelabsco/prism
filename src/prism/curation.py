@@ -2,13 +2,14 @@
 
 import json
 import sqlite3
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from prism import config, db, packet
-from prism.models import Curation
+from prism.models import Curation, Slug
 
 STALE = "-1 hour"  # `curating` for longer than this counts as abandoned
 
@@ -49,6 +50,9 @@ def next_packet(conn: sqlite3.Connection, reels_dir: Path | None = None) -> Path
         data = json.loads(path.read_text(encoding="utf-8"))
         data["recent_titles"] = packet.recent_titles(conn, row["id"])
         data["categories"] = packet.categories(conn)
+        data["collection_categories"] = packet.collection_categories(
+            conn, data.get("collections", [])
+        )
         path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -198,6 +202,55 @@ def reject(conn: sqlite3.Connection, slug: str) -> int:
         ).rowcount
         db.log_event(conn, "category_rejected", slug=slug)
     return n
+
+
+def add(
+    conn: sqlite3.Connection, slug: str, name: str, description: str | None = None
+) -> None:
+    """The user's own category: active right away. Revives a rejected slug."""
+    try:
+        TypeAdapter(Slug).validate_python(slug)
+    except ValidationError:
+        raise CurationError(
+            f"{slug} is not a valid slug, use lowercase words joined by - (home-decor)"
+        ) from None
+    row = conn.execute(
+        "SELECT status FROM categories WHERE slug = ?", (slug,)
+    ).fetchone()
+    if row and row["status"] != "rejected":
+        hint = " (decide it with approve)" if row["status"] == "proposed" else ""
+        raise CurationError(f"category {slug} already exists: {row['status']}{hint}")
+    with conn:
+        conn.execute(
+            "INSERT INTO categories (slug, name, description, status)"
+            " VALUES (?, ?, ?, 'approved') ON CONFLICT (slug) DO UPDATE SET"
+            " name = excluded.name, description = excluded.description,"
+            " status = 'approved'",
+            (slug, name, description or name),
+        )
+        db.log_event(conn, "category_added", slug=slug, name=name)
+
+
+def collections(conn: sqlite3.Connection) -> tuple[list[dict], int]:
+    """Every collection in the queue with its reel count and mapping, most used first.
+
+    Second value: reels in no collection.
+    """
+    counts: Counter[str] = Counter()
+    loose = 0
+    for row in conn.execute("SELECT source_tags FROM reels"):
+        tags = json.loads(row["source_tags"] or "[]")
+        counts.update(tags)
+        loose += not tags
+    return [
+        {
+            "name": name,
+            "reels": n,
+            "slug": config.settings.collections.get(name),
+            "active": bool(packet.collection_categories(conn, [name])),
+        }
+        for name, n in counts.most_common()
+    ], loose
 
 
 def uncategorized(conn: sqlite3.Connection) -> list[sqlite3.Row]:

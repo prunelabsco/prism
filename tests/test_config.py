@@ -19,3 +19,9 @@ def test_template_is_valid_toml(tmp_path):
     f = tmp_path / "config.toml"
     f.write_text(config.TEMPLATE)
     assert config.load(f) == config.Settings()
+
+
+def test_collections_mapping(tmp_path):
+    p = tmp_path / "config.toml"
+    p.write_text('[collections]\n"mamm🍴" = "recipes"\n', encoding="utf-8")
+    assert config.load(p).collections == {"mamm🍴": "recipes"}

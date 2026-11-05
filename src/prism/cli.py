@@ -236,7 +236,7 @@ def commit(
     typer.echo(line)
 
 
-category_app = typer.Typer(help="Manage categories (list, approve, reject).")
+category_app = typer.Typer(help="Manage categories (list, add, approve, reject).")
 app.add_typer(category_app, name="category")
 
 
@@ -263,6 +263,22 @@ def category_list() -> None:
         typer.echo(line)
 
 
+@category_app.command("add")
+def category_add(
+    slug: str,
+    name: str | None = typer.Argument(None, help="Display name (default: from slug)"),
+    description: str | None = typer.Option(
+        None, help="What belongs here, read by the agent"
+    ),
+) -> None:
+    """Create your own category, active right away."""
+    from prism import curation
+
+    name = name or slug.replace("-", " ").title()
+    _curation_call(curation.add, _open(), slug, name, description)
+    typer.echo(f"Category {slug} is active.")
+
+
 @category_app.command("approve")
 def category_approve(slug: str) -> None:
     """Activate a proposed category."""
@@ -279,6 +295,21 @@ def category_reject(slug: str) -> None:
 
     n = _curation_call(curation.reject, _open(), slug)
     typer.echo(f"Category {slug} rejected, {n} ideas now need a category.")
+
+
+@app.command()
+def collections() -> None:
+    """Instagram collections in the queue and the category each one maps to."""
+    from prism import curation
+
+    rows, loose = curation.collections(_open())
+    for c in rows:
+        target = c["slug"] or "-"
+        if c["slug"] and not c["active"]:
+            target += " (not an active category)"
+        typer.echo(f"  {c['reels']:>4}  {c['name']}  ->  {target}")
+    typer.echo(f"  {loose:>4}  (no collection)")
+    typer.echo(f"Mappings live in [collections] in {config.CONFIG_FILE}")
 
 
 @app.command()

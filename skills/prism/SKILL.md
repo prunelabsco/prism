@@ -51,6 +51,19 @@ prism status
 - If it reports Instagram isn't responding on this network, tell the user to try another network (a phone hotspot works) or wait. `prism doctor` checks this too.
 - `prism fetch` again picks up `/p/` posts it deferred.
 
+### Sort by the user's Instagram collections (first time, and after a fetch adds new ones)
+
+1. `prism collections` lists each collection with its reel count and current category. Posts `fetch` deferred aren't counted until a later fetch picks them up.
+2. Suggest a mapping: merge names that mean the same thing, and leave out cryptic or tiny collections unless the user knows what they are. Ask about the rest.
+3. Write only what the user confirmed, under `[collections]` in `~/.prism/config.toml`:
+   ```toml
+   [collections]
+   "food🍴" = "recipes"
+   ```
+4. A mapping needs an active category. If it needs a new one, confirm the name first, then `prism category add <slug> "Name"`. The user can also add their own at any time.
+
+Mapped reels get `collection_categories` in their packet. Reels in no mapped collection are sorted by content as usual. Already curated reels don't move.
+
 ## 3. Curate (repeat N times, default 5)
 
 Read `references/curation.md` once before the first reel. It has the judgment rules, the `curation.json` schema and the confidence criteria.
@@ -58,6 +71,7 @@ Read `references/curation.md` once before the first reel. It has the judgment ru
 1. `prism next` prints a `packet.json` path, or `No ready reels.` (then stop and summarize). The reel folder is that file's folder.
 2. Read `packet.json`:
    - `user_note`, `collections`: the user's own hints about why they saved it. Hints, not proof.
+   - `collection_categories`: the categories the user mapped those collections to. Use them for the ideas (rules in `references/curation.md`).
    - `categories`: `core`/`approved` are active; `proposed` already exist as proposals (reuse, never propose a twin).
    - `recent_titles`: for spotting re-uploads (`duplicate_of`).
 3. **Look at every frame** (`frames[].path`, relative to the reel folder). Most reels carry their content as on-screen text; never judge from caption or transcript alone.

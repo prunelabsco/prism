@@ -185,3 +185,27 @@ def test_category_flow(settings):
     r = runner.invoke(app, ["recategorize", "1", "projects"])
     assert r.exit_code == 0 and "moved to projects" in r.output
     assert "No uncategorized ideas" in runner.invoke(app, ["recategorize"]).output
+
+
+def test_category_add(settings):
+    runner.invoke(app, ["init"])
+    r = runner.invoke(app, ["category", "add", "home-decor"])
+    assert r.exit_code == 0 and "home-decor is active" in r.output
+    assert "Home Decor" in runner.invoke(app, ["category", "list"]).output
+    assert runner.invoke(app, ["category", "add", "home-decor"]).exit_code == 1
+    assert runner.invoke(app, ["category", "add", "Bad Slug"]).exit_code == 1
+
+
+def test_collections_lists_mapping(settings, monkeypatch):
+    conn = _seed_reels(settings, [("a", "queued", 0)])
+    with conn:
+        conn.execute('UPDATE reels SET source_tags = \'["makan", "d1"]\'')
+    monkeypatch.setattr(
+        config,
+        "settings",
+        settings.model_copy(update={"collections": {"makan": "recipes", "d1": "nope"}}),
+    )
+    out = runner.invoke(app, ["collections"]).output
+    assert "makan  ->  recipes\n" in out
+    assert "d1  ->  nope (not an active category)" in out
+    assert "0  (no collection)" in out
