@@ -32,9 +32,8 @@ _COOKIE_FIXES = (
     (
         "dpapi",
         (
-            "The browser is blocking access to its cookies. Export them to a file"
-            " and set `cookies_file` under [download] in the config, or try another"
-            " browser, such as Firefox. The README has the steps."
+            "The browser is blocking access to its cookies. Run `prism login`,"
+            " or set `browser` to another browser, such as Firefox."
         ),
     ),
 )

@@ -40,7 +40,7 @@ TEMPLATE = """\
 # chrome, brave, firefox, edge, safari, ... Run `prism doctor` to check.
 # browser = "chrome"
 # browser_profile = "Default"
-# Browser cookies blocked? Export them to a file instead. This wins over `browser`.
+# Browser cookies blocked? `prism login` sets this for you. It wins over `browser`.
 # cookies_file = "~/.prism/instagram-cookies.txt"
 # max_per_run = 30
 

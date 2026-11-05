@@ -46,7 +46,7 @@ def _transcriber() -> Check:
 def _cookies_file(path: Path) -> Check:
     import yt_dlp.cookies
 
-    export = "Export it again from instagram.com, the README has the steps"
+    export = "Run `prism login`"
     if not path.is_file():
         return Check("instagram login", False, f"{path} not found. {export}")
     jar = yt_dlp.cookies.YoutubeDLCookieJar(path)
@@ -78,7 +78,7 @@ def _cookies() -> Check:
             "instagram login",
             False,
             f'no browser set. Add `browser = "chrome"` (or brave, firefox, edge,'
-            f" safari...) under [download] in {config.CONFIG_FILE}",
+            f" safari...) under [download] in {config.CONFIG_FILE}, or run `prism login`",
         )
     import yt_dlp.cookies
 
