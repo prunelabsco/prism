@@ -58,7 +58,11 @@ def _cookies() -> Check:
         jar = yt_dlp.cookies.extract_cookies_from_browser(d.browser, d.browser_profile)
     # unknown browser/profile, locked or unreadable cookie store: all mean "fix setup"
     except Exception as e:  # noqa: BLE001
-        return Check("instagram login", False, f"can't read {label} cookies: {e}")
+        from prism.download import cookie_fix
+
+        fix = cookie_fix(str(e))
+        detail = f"can't read {label} cookies: {e}"
+        return Check("instagram login", False, f"{detail} {fix}" if fix else detail)
     if not any(c.name == "sessionid" and "instagram.com" in c.domain for c in jar):
         return Check(
             "instagram login",

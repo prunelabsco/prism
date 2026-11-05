@@ -26,10 +26,29 @@ _TRANSIENT = (
 )
 
 
+# browser cookie store unreadable: (yt-dlp message, what the user can do)
+_COOKIE_FIXES = (
+    ("could not copy chrome cookie", "Close the browser completely, then try again."),
+    (
+        "dpapi",
+        (
+            "The browser is blocking access to its cookies. Try another browser,"
+            " such as Firefox: log in to Instagram there and set `browser` under"
+            " [download] in the config."
+        ),
+    ),
+)
+
+
+def cookie_fix(msg: str) -> str | None:
+    low = msg.lower()
+    return next((fix for marker, fix in _COOKIE_FIXES if marker in low), None)
+
+
 class IgError(Exception):
     """yt-dlp failed for one post.
 
-    transient=True: rate limit/login/network, try again later.
+    transient=True: rate limit/login/network/cookies, try again later.
     False: probably deleted/private. no_video: post has no video.
     """
 
@@ -39,10 +58,22 @@ class IgError(Exception):
         self.no_video = no_video
 
 
-def stop_reason(e: IgError) -> str:
-    """Why a run stopped. A timeout is the network, not a limit on the account."""
+def error_kind(e: IgError) -> str:
+    """A timeout is the network, not a limit on the account."""
     low = str(e).lower()
+    if cookie_fix(low):
+        return "cookies"
     if "timed out" in low or "connection" in low:
+        return "network"
+    return "rate_limited"
+
+
+def stop_reason(e: IgError) -> str:
+    """Why a run stopped."""
+    kind = error_kind(e)
+    if kind == "cookies":
+        return f"can't read the browser's cookies. {cookie_fix(str(e))} ({e})"
+    if kind == "network":
         return f"Instagram is not responding on this network, wait or try another: {e}"
     return f"rate limit or login, wait before trying again: {e}"
 
@@ -78,7 +109,9 @@ def _extract(
         low = msg.lower()
         if any(m in low for m in _NO_VIDEO):
             raise IgError(msg, transient=False, no_video=True) from e
-        raise IgError(msg, any(m in low for m in _TRANSIENT)) from e
+        # cookies: our setup, not the post. Must not count against the reel
+        transient = any(m in low for m in _TRANSIENT) or cookie_fix(msg) is not None
+        raise IgError(msg, transient) from e
 
 
 def _entries(info: dict) -> list[dict]:
