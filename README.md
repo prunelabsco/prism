@@ -87,7 +87,7 @@ Run `prism doctor` again until everything says `ok`. Then write a few lines abou
 - **`prism` not found after install:** run `uv tool update-shell`, then open a new terminal.
 - **`Could not copy Chrome cookie database` in `prism doctor`:** close the browser completely, then run it again.
 - **`Failed to decrypt with DPAPI` in `prism doctor`:** the browser is blocking access to its cookies (seen with Brave). Run [`prism login`](#log-in-with-prism-login).
-- **Certificate errors during install (`UnknownIssuer`, `unable to get local issuer certificate`):** antivirus that scans HTTPS, such as Avast, can cause these. Add `--native-tls` to the `uv tool install` command and run `git config --global http.sslBackend schannel`. Certificates are still checked.
+- **Certificate errors during install (`UnknownIssuer`, `unable to get local issuer certificate`):** antivirus that scans HTTPS, such as Avast, can cause these. Add `--system-certs` to the `uv tool install` command and run `git config --global http.sslBackend schannel`. Certificates are still checked.
 - **`winget` fails on the `msstore` source:** add `--source winget`.
 - **`prism process` stops during `transcribing` with no summary line:** the transcription library crashed, which Prism can't catch. Force the CPU in `~/.prism/config.toml`, then run it again:
 
@@ -96,7 +96,7 @@ Run `prism doctor` again until everything says `ok`. Then write a few lines abou
   device = "cpu"
   ```
 
-  With an NVIDIA GPU but no CUDA libraries, you don't need this: Prism switches to the CPU by itself when it sees the `cublas` error.
+  With an NVIDIA GPU but no CUDA libraries, you shouldn't need this: Prism looks for them first and uses the CPU when they're missing. If you do have them and Prism still says they're missing, set `device = "cuda"`.
 
 ### Log in with `prism login`
 
