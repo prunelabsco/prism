@@ -7,6 +7,7 @@ override any subset of keys; unknown keys are an error, not silently ignored.
 import os
 import tomllib
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -85,6 +86,8 @@ class Frames(_Section):
 
 class Transcribe(_Section):
     model: str | None = None  # None = the backend's default (transcribe.MODELS)
+    # faster-whisper only. auto: CUDA if usable, else CPU
+    device: Literal["auto", "cpu", "cuda"] = "auto"
 
 
 class Curate(_Section):

@@ -1,5 +1,7 @@
 import json
 import subprocess
+import sys
+import types
 
 import pytest
 
@@ -94,3 +96,96 @@ def test_silent_video_skips_whisper(tmp_path, monkeypatch):
     monkeypatch.setattr(transcribe, "_whisper", never)
     t = transcribe.transcribe(tmp_path)
     assert t == {"language": None, "text": "", "segments": [], "has_speech": False}
+
+
+class FakeModel:
+    def __init__(self, error=None):
+        self.error = error
+
+    def transcribe(self, audio):
+        def segments():
+            if self.error:  # real errors come while reading the segments
+                raise self.error
+            yield from ()
+
+        return segments(), type("Info", (), {"language": "id"})
+
+
+@pytest.fixture
+def fake_models(monkeypatch):
+    """Records which devices load. `broken` holds the device -> error map."""
+    loaded = []
+    broken = {}
+
+    def model(name, device):
+        loaded.append(device)
+        return FakeModel(broken.get(device))
+
+    monkeypatch.setattr(transcribe, "_faster_model", model)
+    monkeypatch.setattr(transcribe, "_cuda_failed", False)
+    monkeypatch.setattr(transcribe, "model_name", lambda: "m")
+    return loaded, broken
+
+
+def set_device(monkeypatch, device):
+    from prism import config
+
+    s = config.Settings(transcribe=config.Transcribe(device=device))
+    monkeypatch.setattr(transcribe, "settings", s)
+
+
+CUBLAS = RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+
+
+def test_missing_cuda_falls_back_to_cpu_and_stays_there(
+    fake_models, monkeypatch, capsys
+):
+    loaded, broken = fake_models
+    broken["auto"] = CUBLAS
+    set_device(monkeypatch, "auto")
+    assert transcribe._faster_with_fallback(None)["language"] == "id"
+    assert loaded == ["auto", "cpu"]
+    assert "CPU" in capsys.readouterr().err
+    transcribe._faster_with_fallback(None)
+    assert loaded == ["auto", "cpu", "cpu"]
+
+
+def test_other_errors_are_not_swallowed(fake_models, monkeypatch):
+    loaded, broken = fake_models
+    broken["auto"] = RuntimeError("invalid audio")
+    set_device(monkeypatch, "auto")
+    with pytest.raises(RuntimeError, match="invalid audio"):
+        transcribe._faster_with_fallback(None)
+    assert loaded == ["auto"]
+
+
+def test_explicit_cuda_never_falls_back(fake_models, monkeypatch):
+    loaded, broken = fake_models
+    broken["cuda"] = CUBLAS
+    set_device(monkeypatch, "cuda")
+    with pytest.raises(RuntimeError, match="cublas"):
+        transcribe._faster_with_fallback(None)
+    assert loaded == ["cuda"]
+
+
+def test_device_cpu_from_config(fake_models, monkeypatch):
+    loaded, _ = fake_models
+    set_device(monkeypatch, "cpu")
+    transcribe._faster_with_fallback(None)
+    assert loaded == ["cpu"]
+
+
+def test_cpu_uses_int8(monkeypatch):
+    seen = {}
+
+    def fake(name, device, compute_type):
+        seen[device] = compute_type
+
+    # not installed on Apple Silicon, which uses mlx
+    module = types.SimpleNamespace(WhisperModel=fake)
+    monkeypatch.setitem(sys.modules, "faster_whisper", module)
+    transcribe._faster_model.cache_clear()
+    transcribe._faster_model("m", "cpu")
+    transcribe._faster_model("m", "auto")
+    transcribe._faster_model.cache_clear()
+    assert seen == {"cpu": "int8", "auto": "auto"}
