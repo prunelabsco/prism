@@ -1,5 +1,6 @@
 """Video -> transcript.json via whisper."""
 
+import ctypes.util
 import functools
 import importlib.util
 import json
@@ -85,23 +86,37 @@ def _faster_transcribe(audio, device: str) -> dict:
     }  # fmt: skip
 
 
-_cuda_failed = False  # stays on CPU for the rest of the run after one failure
+_on_cpu = False  # stays on CPU for the rest of the run once auto gives up on CUDA
+
+
+def _cuda_libs_found() -> bool:
+    # ponytail: name matches ctranslate2's CUDA 12 build, bump it when that changes.
+    # A wrong "not found" only costs speed, `device = "cuda"` skips this check
+    name = "cublas64_12" if sys.platform == "win32" else "cublas"
+    return ctypes.util.find_library(name) is not None
+
+
+def _switch_to_cpu(reason: str) -> None:
+    global _on_cpu
+    log.warning("transcribing on CPU: %s", reason)
+    print(f"{reason}, transcribing on CPU (slower).", file=sys.stderr)
+    _on_cpu = True
 
 
 def _faster_with_fallback(audio) -> dict:
-    """GPU machines without the CUDA libraries see the GPU, then fail on first use."""
-    global _cuda_failed
+    """GPU machines without the CUDA libraries see the GPU, then fail on first use.
+    That failure can be a native crash Python can't catch, so check before loading."""
     device = settings.transcribe.device
-    if device == "auto" and _cuda_failed:
+    if device == "auto" and not _on_cpu and not _cuda_libs_found():
+        _switch_to_cpu("No CUDA libraries found")
+    if device == "auto" and _on_cpu:
         device = "cpu"
     try:
         return _faster_transcribe(audio, device)
     except Exception as e:
         if device != "auto" or not any(m in str(e).lower() for m in _CUDA_ERRORS):
             raise
-        log.warning("CUDA unusable, falling back to CPU: %s", e)
-        print("CUDA isn't usable here, transcribing on CPU (slower).", file=sys.stderr)
-        _cuda_failed = True
+        _switch_to_cpu(f"CUDA isn't usable ({e})")
         return _faster_transcribe(audio, "cpu")
 
 

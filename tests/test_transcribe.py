@@ -122,7 +122,8 @@ def fake_models(monkeypatch):
         return FakeModel(broken.get(device))
 
     monkeypatch.setattr(transcribe, "_faster_model", model)
-    monkeypatch.setattr(transcribe, "_cuda_failed", False)
+    monkeypatch.setattr(transcribe, "_on_cpu", False)
+    monkeypatch.setattr(transcribe, "_cuda_libs_found", lambda: True)
     monkeypatch.setattr(transcribe, "model_name", lambda: "m")
     return loaded, broken
 
@@ -148,6 +149,45 @@ def test_missing_cuda_falls_back_to_cpu_and_stays_there(
     assert "CPU" in capsys.readouterr().err
     transcribe._faster_with_fallback(None)
     assert loaded == ["auto", "cpu", "cpu"]
+
+
+def test_missing_libraries_skip_the_gpu_entirely(fake_models, monkeypatch, capsys):
+    loaded, _ = fake_models
+    monkeypatch.setattr(transcribe, "_cuda_libs_found", lambda: False)
+    set_device(monkeypatch, "auto")
+    transcribe._faster_with_fallback(None)
+    transcribe._faster_with_fallback(None)
+    assert loaded == ["cpu", "cpu"]
+    assert capsys.readouterr().err.count("No CUDA libraries found") == 1
+
+
+@pytest.mark.parametrize("device", ["cuda", "cpu"])
+def test_explicit_device_skips_the_library_check(fake_models, monkeypatch, device):
+    loaded, _ = fake_models
+    monkeypatch.setattr(transcribe, "_cuda_libs_found", lambda: False)
+    set_device(monkeypatch, device)
+    transcribe._faster_with_fallback(None)
+    assert loaded == [device]
+
+
+def test_libraries_found_uses_auto(fake_models, monkeypatch):
+    loaded, _ = fake_models
+    set_device(monkeypatch, "auto")
+    transcribe._faster_with_fallback(None)
+    assert loaded == ["auto"]
+
+
+@pytest.mark.parametrize(
+    "platform, library", [("win32", "cublas64_12"), ("linux", "cublas")]
+)
+def test_library_name_per_platform(monkeypatch, platform, library):
+    asked = []
+    monkeypatch.setattr(transcribe.sys, "platform", platform)
+    monkeypatch.setattr(
+        transcribe.ctypes.util, "find_library", lambda n: asked.append(n)
+    )
+    assert transcribe._cuda_libs_found() is False
+    assert asked == [library]
 
 
 def test_other_errors_are_not_swallowed(fake_models, monkeypatch):
