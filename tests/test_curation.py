@@ -294,3 +294,29 @@ def test_next_refreshes_categories(conn, tmp_path):
     path = curation.next_packet(conn, tmp_path)
     slugs = [c["slug"] for c in json.loads(path.read_text())["categories"]]
     assert "home-decor" in slugs
+
+
+def test_add_category(conn):
+    curation.add(conn, "home-decor", "Home Decor")
+    row = conn.execute(
+        "SELECT name, description, status FROM categories WHERE slug = 'home-decor'"
+    ).fetchone()
+    assert tuple(row) == ("Home Decor", "Home Decor", "approved")
+
+
+@pytest.mark.parametrize("slug", ["Home Decor", "food🍴", "-x", ""])
+def test_add_rejects_bad_slug(conn, slug):
+    with pytest.raises(curation.CurationError, match="not a valid slug"):
+        curation.add(conn, slug, "x")
+
+
+def test_add_refuses_existing_but_revives_rejected(conn):
+    with pytest.raises(curation.CurationError, match="already exists: core"):
+        curation.add(conn, "recipes", "x")
+    curation.add(conn, "design", "Design")
+    conn.execute("UPDATE categories SET status = 'rejected' WHERE slug = 'design'")
+    curation.add(conn, "design", "Design 2")
+    row = conn.execute(
+        "SELECT name, status FROM categories WHERE slug = 'design'"
+    ).fetchone()
+    assert tuple(row) == ("Design 2", "approved")

@@ -185,3 +185,12 @@ def test_category_flow(settings):
     r = runner.invoke(app, ["recategorize", "1", "projects"])
     assert r.exit_code == 0 and "moved to projects" in r.output
     assert "No uncategorized ideas" in runner.invoke(app, ["recategorize"]).output
+
+
+def test_category_add(settings):
+    runner.invoke(app, ["init"])
+    r = runner.invoke(app, ["category", "add", "home-decor"])
+    assert r.exit_code == 0 and "home-decor is active" in r.output
+    assert "Home Decor" in runner.invoke(app, ["category", "list"]).output
+    assert runner.invoke(app, ["category", "add", "home-decor"]).exit_code == 1
+    assert runner.invoke(app, ["category", "add", "Bad Slug"]).exit_code == 1

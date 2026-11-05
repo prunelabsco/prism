@@ -236,7 +236,7 @@ def commit(
     typer.echo(line)
 
 
-category_app = typer.Typer(help="Manage categories (list, approve, reject).")
+category_app = typer.Typer(help="Manage categories (list, add, approve, reject).")
 app.add_typer(category_app, name="category")
 
 
@@ -261,6 +261,22 @@ def category_list() -> None:
         if c["status"] == "proposed":
             line += f"  ({c['reason'] or '-'})"
         typer.echo(line)
+
+
+@category_app.command("add")
+def category_add(
+    slug: str,
+    name: str | None = typer.Argument(None, help="Display name (default: from slug)"),
+    description: str | None = typer.Option(
+        None, help="What belongs here, read by the agent"
+    ),
+) -> None:
+    """Create your own category, active right away."""
+    from prism import curation
+
+    name = name or slug.replace("-", " ").title()
+    _curation_call(curation.add, _open(), slug, name, description)
+    typer.echo(f"Category {slug} is active.")
 
 
 @category_app.command("approve")

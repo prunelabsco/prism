@@ -5,10 +5,10 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from prism import config, db, packet
-from prism.models import Curation
+from prism.models import Curation, Slug
 
 STALE = "-1 hour"  # `curating` for longer than this counts as abandoned
 
@@ -198,6 +198,33 @@ def reject(conn: sqlite3.Connection, slug: str) -> int:
         ).rowcount
         db.log_event(conn, "category_rejected", slug=slug)
     return n
+
+
+def add(
+    conn: sqlite3.Connection, slug: str, name: str, description: str | None = None
+) -> None:
+    """The user's own category: active right away. Revives a rejected slug."""
+    try:
+        TypeAdapter(Slug).validate_python(slug)
+    except ValidationError:
+        raise CurationError(
+            f"{slug} is not a valid slug, use lowercase words joined by - (home-decor)"
+        ) from None
+    row = conn.execute(
+        "SELECT status FROM categories WHERE slug = ?", (slug,)
+    ).fetchone()
+    if row and row["status"] != "rejected":
+        hint = " (decide it with approve)" if row["status"] == "proposed" else ""
+        raise CurationError(f"category {slug} already exists: {row['status']}{hint}")
+    with conn:
+        conn.execute(
+            "INSERT INTO categories (slug, name, description, status)"
+            " VALUES (?, ?, ?, 'approved') ON CONFLICT (slug) DO UPDATE SET"
+            " name = excluded.name, description = excluded.description,"
+            " status = 'approved'",
+            (slug, name, description or name),
+        )
+        db.log_event(conn, "category_added", slug=slug, name=name)
 
 
 def uncategorized(conn: sqlite3.Connection) -> list[sqlite3.Row]:
