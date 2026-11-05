@@ -70,3 +70,58 @@ def test_cookie_errors_say_what_to_do(monkeypatch, tmp_path):
 
     assert "Close the browser" in fails("Could not copy Chrome cookie database.").detail
     assert "another browser" in fails("Failed to decrypt with DPAPI.").detail
+
+
+def with_cookies_file(monkeypatch, tmp_path, content):
+    f = tmp_path / "cookies.txt"
+    if content is not None:
+        f.write_text(content, encoding="utf-8")
+    s = config.Settings(
+        paths=config.Paths(data_dir=tmp_path / "data", output_dir=tmp_path / "notes"),
+        download=config.Download(browser="brave", cookies_file=f),
+    )
+    monkeypatch.setattr(config, "settings", s)
+
+
+def cookie_line(name, expires):
+    return f".instagram.com\tTRUE\t/\tTRUE\t{expires}\t{name}\tSECRET\n"
+
+
+NETSCAPE = "# Netscape HTTP Cookie File\n"
+LATER = 4102444800  # 2100
+PAST = 946684800  # 2000
+
+
+def test_cookies_file_wins_over_browser(monkeypatch, tmp_path):
+    import yt_dlp.cookies
+
+    def never(*a):
+        raise AssertionError("browser must not be read")
+
+    monkeypatch.setattr(yt_dlp.cookies, "extract_cookies_from_browser", never)
+    with_cookies_file(monkeypatch, tmp_path, NETSCAPE + cookie_line("sessionid", LATER))
+    c = doctor._cookies()
+    assert c.ok and "SECRET" not in c.detail
+
+
+def test_cookies_file_problems_are_fix_lines(monkeypatch, tmp_path):
+    cases = {
+        None: "not found",
+        "not a cookie file": "not a cookies.txt",
+        NETSCAPE: "no live Instagram session",
+        NETSCAPE + cookie_line("csrftoken", LATER): "no live Instagram session",
+        NETSCAPE + cookie_line("sessionid", PAST): "no live Instagram session",
+    }
+    for content, expected in cases.items():
+        with_cookies_file(monkeypatch, tmp_path, content)
+        c = doctor._cookies()
+        assert not c.ok and expected in c.detail and "SECRET" not in c.detail
+        (tmp_path / "cookies.txt").unlink(missing_ok=True)
+
+
+def test_cookie_values_never_reach_the_terminal(monkeypatch, tmp_path, capfd):
+    bad_line = ".instagram.com\tTRUE\t/\tTRUE\tnot-a-date\tsessionid\tSECRET\n"
+    with_cookies_file(monkeypatch, tmp_path, NETSCAPE + bad_line)
+    c = doctor._cookies()
+    out, err = capfd.readouterr()
+    assert not c.ok and "SECRET" not in c.detail + out + err

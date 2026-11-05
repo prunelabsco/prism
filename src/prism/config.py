@@ -40,6 +40,8 @@ TEMPLATE = """\
 # chrome, brave, firefox, edge, safari, ... Run `prism doctor` to check.
 # browser = "chrome"
 # browser_profile = "Default"
+# Browser cookies blocked? Export them to a file instead. This wins over `browser`.
+# cookies_file = "~/.prism/instagram-cookies.txt"
 # max_per_run = 30
 
 # Sort an Instagram collection into a category. `prism collections` lists the names.
@@ -69,6 +71,8 @@ class Download(_Section):
     # explicit profile: otherwise yt-dlp picks the profile whose cookies changed
     # last, not necessarily the one logged in to Instagram
     browser_profile: str | None = None
+    # Netscape cookies.txt, wins over `browser`. For browsers that block yt-dlp
+    cookies_file: Path | None = None
 
 
 class Frames(_Section):
@@ -107,6 +111,11 @@ class Settings(_Section):
     def vault_dir(self) -> Path:
         v = self.paths.vault_dir
         return v.expanduser().resolve() if v else self.output_dir
+
+    @property
+    def cookies_file(self) -> Path | None:
+        f = self.download.cookies_file
+        return f.expanduser().resolve() if f else None
 
     @property
     def db_path(self) -> Path:

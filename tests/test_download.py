@@ -127,3 +127,25 @@ def test_error_classified(ydl, tmp_path, msg, transient):
         download.fetch_video(URL, tmp_path / "r")
     assert e.value.transient is transient
     assert not download.is_complete(tmp_path / "r")
+
+
+def test_cookies_file_wins_over_browser(monkeypatch):
+    from prism import config
+
+    both = config.Settings(
+        download=config.Download(browser="brave", cookies_file="~/c.txt")
+    )
+    monkeypatch.setattr(download, "settings", both)
+    opts = download._opts()
+    assert opts["cookiefile"] == str(Path("~/c.txt").expanduser().resolve())
+    assert "cookiesfrombrowser" not in opts
+
+
+def test_browser_used_without_cookies_file(monkeypatch):
+    from prism import config
+
+    s = config.Settings(download=config.Download(browser="brave"))
+    monkeypatch.setattr(download, "settings", s)
+    opts = download._opts()
+    assert opts["cookiesfrombrowser"] == ("brave", None)
+    assert "cookiefile" not in opts

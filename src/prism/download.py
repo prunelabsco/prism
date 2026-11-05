@@ -32,9 +32,9 @@ _COOKIE_FIXES = (
     (
         "dpapi",
         (
-            "The browser is blocking access to its cookies. Try another browser,"
-            " such as Firefox: log in to Instagram there and set `browser` under"
-            " [download] in the config."
+            "The browser is blocking access to its cookies. Export them to a file"
+            " and set `cookies_file` under [download] in the config, or try another"
+            " browser, such as Firefox. The README has the steps."
         ),
     ),
 )
@@ -85,9 +85,12 @@ def throttle() -> None:
 
 def _opts(**extra) -> dict:
     d = settings.download
-    cookies = (
-        {"cookiesfrombrowser": (d.browser, d.browser_profile)} if d.browser else {}
-    )
+    if settings.cookies_file:
+        cookies = {"cookiefile": str(settings.cookies_file)}
+    elif d.browser:
+        cookies = {"cookiesfrombrowser": (d.browser, d.browser_profile)}
+    else:
+        cookies = {}
     return {
         **cookies,
         "skip_download": True,
