@@ -89,6 +89,14 @@ Run `prism doctor` again until everything says `ok`. Then write a few lines abou
 - **`Failed to decrypt with DPAPI` in `prism doctor`:** the browser is blocking access to its cookies (seen with Brave). Run [`prism login`](#log-in-with-prism-login).
 - **Certificate errors during install (`UnknownIssuer`, `unable to get local issuer certificate`):** antivirus that scans HTTPS, such as Avast, can cause these. Add `--native-tls` to the `uv tool install` command and run `git config --global http.sslBackend schannel`. Certificates are still checked.
 - **`winget` fails on the `msstore` source:** add `--source winget`.
+- **`prism process` stops during `transcribing` with no summary line:** the transcription library crashed, which Prism can't catch. Force the CPU in `~/.prism/config.toml`, then run it again:
+
+  ```toml
+  [transcribe]
+  device = "cpu"
+  ```
+
+  With an NVIDIA GPU but no CUDA libraries, you don't need this: Prism switches to the CPU by itself when it sees the `cublas` error.
 
 ### Log in with `prism login`
 
