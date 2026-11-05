@@ -1,3 +1,8 @@
+import json
+import os
+import subprocess
+import sys
+
 import pytest
 from typer.testing import CliRunner
 
@@ -209,3 +214,29 @@ def test_collections_lists_mapping(settings, monkeypatch):
     assert "makan  ->  recipes\n" in out
     assert "d1  ->  nope (not an active category)" in out
     assert "0  (no collection)" in out
+
+
+def test_emoji_output_survives_a_non_utf8_pipe(tmp_path):
+    # Windows pipes default to cp1252: an agent reading `prism collections` got a crash
+    env = {**os.environ, "PRISM_HOME": str(tmp_path), "PYTHONIOENCODING": "cp1252"}
+
+    def prism(*args):
+        code = "from prism.cli import app; app()"
+        return subprocess.run(
+            [sys.executable, "-c", code, *args],
+            env=env,
+            capture_output=True,
+            check=False,
+        )
+
+    assert prism("init").returncode == 0
+    conn = db.connect(tmp_path / "prism.db")
+    with conn:
+        conn.execute(
+            "INSERT INTO reels (id, source, source_id, url, status, source_tags)"
+            " VALUES ('a', 'ig_export', 'a', 'u', 'queued', ?)",
+            (json.dumps(["mamm🍴"]),),
+        )
+    r = prism("collections")
+    assert r.returncode == 0, r.stderr
+    assert "mamm🍴" in r.stdout.decode("utf-8")

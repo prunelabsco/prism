@@ -1,7 +1,9 @@
 """Prism CLI entry point. Command routing only."""
 
+import io
 import logging
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -13,6 +15,14 @@ app = typer.Typer(
     help="Prism: turn saved Instagram reels into categorized ideas.",
     no_args_is_help=True,
 )
+
+
+@app.callback()
+def _utf8_output() -> None:
+    # Windows pipes default to cp1252, which can't print emoji in collection names
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
 
 
 def _log_to_file() -> None:
