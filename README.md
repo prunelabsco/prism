@@ -1,5 +1,7 @@
 # Prism <picture><source media="(prefers-color-scheme: dark)" srcset="assets/buddy-dark.svg"><img src="assets/buddy.svg" height="40" alt="Buddy, the Prune Labs mascot"></picture>
 
+[Buy me a coffee](https://sociabuzz.com/prunelabs/tribe)
+
 You save hundreds of Instagram reels "for later". Prism turns them into notes you can actually use: one Markdown note per reel, with the ideas worth taking, sorted into categories, and every claim labeled **seen**, **guessed** or **unknown**.
 
 It runs on your machine with your own AI agent (Claude Code, Codex, OpenCode, Gemini CLI, Cursor...). No server, no account. Prism uploads nothing; curation goes through your agent.
