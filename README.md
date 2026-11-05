@@ -86,13 +86,29 @@ Run `prism doctor` again until everything says `ok`. Then write a few lines abou
 
 - **`prism` not found after install:** run `uv tool update-shell`, then open a new terminal.
 - **`Could not copy Chrome cookie database` in `prism doctor`:** close the browser completely, then run it again.
-- **`Failed to decrypt with DPAPI` in `prism doctor`:** the browser is blocking access to its cookies (seen with Brave). [Use a cookies file](#use-a-cookies-file), or try another browser, such as Firefox: log in to Instagram there, set `browser` in the config, and remove `browser_profile` if it names a profile from the old browser.
+- **`Failed to decrypt with DPAPI` in `prism doctor`:** the browser is blocking access to its cookies (seen with Brave). Run [`prism login`](#log-in-with-prism-login).
 - **Certificate errors during install (`UnknownIssuer`, `unable to get local issuer certificate`):** antivirus that scans HTTPS, such as Avast, can cause these. Add `--native-tls` to the `uv tool install` command and run `git config --global http.sslBackend schannel`. Certificates are still checked.
 - **`winget` fails on the `msstore` source:** add `--source winget`.
 
+### Log in with `prism login`
+
+For when Prism can't read your browser's cookies. No extension, no file to save, no config to edit:
+
+```bash
+prism login                    # your configured browser, or the first one installed
+prism login --browser brave    # chrome, brave, edge, chromium, vivaldi, opera, firefox, safari
+prism login --browser-path "/path/to/browser"   # any other Chromium browser
+```
+
+A separate window opens with a profile of its own, so your everyday browser isn't touched. Log in to Instagram there, and it closes by itself. Instagram may treat this as a new login and notify you or ask for 2FA. Your password goes to Instagram only.
+
+Prism saves the Instagram cookies to `~/.prism/instagram-cookies.txt` and sets `cookies_file` in the config. **That file is your Instagram login.** Anyone who has it can use your account, so never share it or put it in a repo. The separate profile in `~/.prism/browser-profiles` stays logged in too. If `prism doctor` says the session is gone, run `prism login` again.
+
+Safari has no separate profile: Prism reads its normal cookies, which needs Full Disk Access for your terminal.
+
 ### Use a cookies file
 
-For when Prism can't read your browser's cookies. You keep using your browser, and export its Instagram cookies once:
+If `prism login` doesn't work for you, export the cookies yourself:
 
 1. Install an extension that exports `cookies.txt` on your machine, such as [Get cookies.txt LOCALLY](https://github.com/kairi003/Get-cookies.txt-LOCALLY).
 2. Open instagram.com, logged in, and export the cookies **for that site only** in Netscape format. Save them as `~/.prism/instagram-cookies.txt`.
@@ -105,7 +121,7 @@ For when Prism can't read your browser's cookies. You keep using your browser, a
 
 5. Run `prism doctor`.
 
-**That file is your Instagram login.** Anyone who has it can use your account, so never share it or put it in a repo. yt-dlp rewrites it after each run, which is normal. If `prism doctor` says the session is gone, export it again.
+The same warning applies to this file. yt-dlp rewrites it after each run, which is normal.
 
 ## Get your Instagram export
 
@@ -252,6 +268,7 @@ faster-whisper on CPU-only machines transcribes slower than mlx on Apple Silicon
 | | |
 |---|---|
 | `prism init` / `prism doctor` | set up / check setup |
+| `prism login` | log in to Instagram in a separate window, for when your browser's cookies can't be read |
 | `prism fetch <export.zip>` | queue reels from an Instagram export (or `--source urls`) |
 | `prism process` | download, frames, transcript |
 | `prism next` / `prism commit` | used by the agent while curating |
@@ -276,7 +293,8 @@ If a user asked you to set up Prism, do this in order:
 Rules:
 
 - If you can't read images, say so and stop. Curation depends on the frames.
-- Never ask for the user's Instagram password. Never read or print cookies, and never open, copy or move a `cookies_file`. The user exports it themselves.
+- Never ask for the user's Instagram password or log in for them. Never read or print cookies, and never open, copy or move a `cookies_file`.
+- If `prism doctor` says the browser is blocking its cookies, run `prism login` and tell the user to log in in the window that opens. It waits up to 5 minutes.
 - Never run `prism process` in a loop or in parallel. If it stops, tell the user.
 - `prism fetch` and `prism process` can run for minutes. Don't interrupt them because they look slow.
 - Never approve, reject or add categories, or write collection mappings, without the user's confirmation. That's the user's call.
