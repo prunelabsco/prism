@@ -1,3 +1,4 @@
+import importlib.metadata
 import json
 import os
 import subprocess
@@ -240,3 +241,9 @@ def test_emoji_output_survives_a_non_utf8_pipe(tmp_path):
     r = prism("collections")
     assert r.returncode == 0, r.stderr
     assert "mamm🍴" in r.stdout.decode("utf-8")
+
+
+def test_version_matches_the_package():
+    r = runner.invoke(app, ["--version"])
+    assert r.exit_code == 0
+    assert r.output.strip() == f"prism {importlib.metadata.version('prism')}"

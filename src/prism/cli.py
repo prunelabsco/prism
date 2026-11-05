@@ -1,5 +1,6 @@
 """Prism CLI entry point. Command routing only."""
 
+import importlib.metadata
 import io
 import logging
 import sqlite3
@@ -17,8 +18,24 @@ app = typer.Typer(
 )
 
 
+def _print_version(show: bool) -> None:
+    if show:
+        typer.echo(f"prism {importlib.metadata.version('prism')}")
+        raise typer.Exit
+
+
 @app.callback()
-def _utf8_output() -> None:
+def _utf8_output(
+    _version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_print_version,
+            is_eager=True,
+            help="Show the version and exit.",
+        ),
+    ] = False,
+) -> None:
     # Windows pipes default to cp1252, which can't print emoji in collection names
     for stream in (sys.stdout, sys.stderr):
         if isinstance(stream, io.TextIOWrapper):
