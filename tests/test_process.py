@@ -212,3 +212,22 @@ def test_packet_error_fails_and_keeps_video(conn, tmp_path):
     assert r.failed == 1 and r.ready == 0
     assert statuses(conn) == {"a": "failed"}
     assert (tmp_path / "a" / "video.mp4").exists()
+
+
+def test_progress_one_line_per_step(conn, tmp_path):
+    add(conn, "a", "b")
+    lines = []
+    run(
+        conn,
+        tmp_path,
+        FakeFetch({"b": download.IgError("timed out", transient=True)}),
+        progress=lines.append,
+    )
+    assert lines == [
+        "a: downloading (1/2)",
+        "a: extracting",
+        "a: transcribing",
+        "a: ready",
+        "b: downloading (2/2)",
+        "b: temporary error, back in the queue",
+    ]

@@ -45,6 +45,7 @@ prism process                                # 30 downloads per run by default
 prism status
 ```
 
+- `fetch` and `process` can run for minutes and print one progress line per step. A long gap is normal (a slow download, the whisper model on the first run). Don't interrupt them because they look slow; check `prism status` from another shell instead.
 - `process` downloads at most `max_per_run` reels per run, throttled on purpose. Instagram rate-limits aggressive downloading and may lock the account. Don't loop `process` back to back or in parallel; suggest a few runs spread over the day for big backlogs.
 - If `process` reports it stopped on rate limit / login, stop and tell the user. Don't retry immediately.
 - If it reports Instagram isn't responding on this network, tell the user to try another network (a phone hotspot works) or wait. `prism doctor` checks this too.
