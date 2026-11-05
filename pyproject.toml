@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "pyyaml>=6.0.3",
     "typer>=0.27.3",
+    "websockets>=15",
     "yt-dlp>=2026.8.19",
 ]
 

@@ -4,13 +4,16 @@ Reads local state (PATH, installed packages, browser cookie store, folders), plu
 one anonymous request to see if instagram.com answers on this network.
 """
 
+import contextlib
 import http.client
 import importlib.util
+import io
 import os
 import shutil
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 
 from prism import config, transcribe
 
@@ -40,14 +43,42 @@ def _transcriber() -> Check:
     return Check("transcription", True, f"{b}, model {transcribe.model_name()}")
 
 
+def _cookies_file(path: Path) -> Check:
+    import yt_dlp.cookies
+
+    export = "Run `prism login`"
+    if not path.is_file():
+        return Check("instagram login", False, f"{path} not found. {export}")
+    jar = yt_dlp.cookies.YoutubeDLCookieJar(path)
+    try:
+        # yt-dlp prints a bad line in full, and that line can hold a cookie value
+        with contextlib.redirect_stderr(io.StringIO()):
+            jar.load()
+    # the message may quote the file, so it is never shown
+    except Exception:  # noqa: BLE001
+        return Check(
+            "instagram login", False, f"{path} is not a cookies.txt file. {export}"
+        )
+    if not any(
+        c.name == "sessionid" and "instagram.com" in c.domain and not c.is_expired()
+        for c in jar
+    ):
+        return Check(
+            "instagram login", False, f"no live Instagram session in {path}. {export}"
+        )
+    return Check("instagram login", True, f"cookies file {path}")
+
+
 def _cookies() -> Check:
     d = config.settings.download
+    if config.settings.cookies_file:
+        return _cookies_file(config.settings.cookies_file)
     if not d.browser:
         return Check(
             "instagram login",
             False,
             f'no browser set. Add `browser = "chrome"` (or brave, firefox, edge,'
-            f" safari...) under [download] in {config.CONFIG_FILE}",
+            f" safari...) under [download] in {config.CONFIG_FILE}, or run `prism login`",
         )
     import yt_dlp.cookies
 

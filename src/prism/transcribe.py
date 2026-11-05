@@ -1,12 +1,17 @@
 """Video -> transcript.json via whisper."""
 
+import ctypes.util
 import functools
 import importlib.util
 import json
+import logging
 import subprocess
+import sys
 from pathlib import Path
 
 from prism.config import settings
+
+log = logging.getLogger("prism.transcribe")
 
 MODELS = {
     "mlx": "mlx-community/whisper-large-v3-turbo",
@@ -18,6 +23,8 @@ NO_SPEECH_PROB = 0.6
 # whisper pads audio to 30 s windows, so after speech ends it may invent
 # segments past the end of the video (seen in 4 of 22 reels)
 TAIL_SLACK_S = 0.5
+# e.g. "Library cublas64_12.dll is not found or cannot be loaded"
+_CUDA_ERRORS = ("cublas", "cudnn", "cuda")
 
 
 class TranscribeError(Exception):
@@ -58,11 +65,59 @@ def model_name() -> str:
 
 
 @functools.cache
-def _faster_model(name: str):
+def _faster_model(name: str, device: str):
     from faster_whisper import WhisperModel
 
-    # auto: CUDA if present, else CPU with the fastest compute type it supports
-    return WhisperModel(name, device="auto", compute_type="auto")
+    # int8 on CPU: Windows crashed on auto with the GPU hidden, this one held
+    compute = "int8" if device == "cpu" else "auto"
+    return WhisperModel(name, device=device, compute_type=compute)
+
+
+def _faster_transcribe(audio, device: str) -> dict:
+    segments, info = _faster_model(model_name(), device).transcribe(audio)
+    # segments is lazy: CUDA errors only show up while reading it
+    return {
+        "language": info.language,
+        "segments": [
+            {"start": s.start, "end": s.end, "text": s.text,
+             "no_speech_prob": s.no_speech_prob}
+            for s in segments
+        ],
+    }  # fmt: skip
+
+
+_on_cpu = False  # stays on CPU for the rest of the run once auto gives up on CUDA
+
+
+def _cuda_libs_found() -> bool:
+    # ponytail: name matches ctranslate2's CUDA 12 build, bump it when that changes.
+    # A wrong "not found" only costs speed, `device = "cuda"` skips this check
+    name = "cublas64_12" if sys.platform == "win32" else "cublas"
+    return ctypes.util.find_library(name) is not None
+
+
+def _switch_to_cpu(reason: str) -> None:
+    global _on_cpu
+    log.warning("transcribing on CPU: %s", reason)
+    print(f"{reason}, transcribing on CPU (slower).", file=sys.stderr)
+    _on_cpu = True
+
+
+def _faster_with_fallback(audio) -> dict:
+    """GPU machines without the CUDA libraries see the GPU, then fail on first use.
+    That failure can be a native crash Python can't catch, so check before loading."""
+    device = settings.transcribe.device
+    if device == "auto" and not _on_cpu and not _cuda_libs_found():
+        _switch_to_cpu("No CUDA libraries found")
+    if device == "auto" and _on_cpu:
+        device = "cpu"
+    try:
+        return _faster_transcribe(audio, device)
+    except Exception as e:
+        if device != "auto" or not any(m in str(e).lower() for m in _CUDA_ERRORS):
+            raise
+        _switch_to_cpu(f"CUDA isn't usable ({e})")
+        return _faster_transcribe(audio, "cpu")
 
 
 def _whisper(video: Path) -> dict:
@@ -82,15 +137,7 @@ def _whisper(video: Path) -> dict:
         capture_output=True, check=True,
     ).stdout  # fmt: skip
     audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
-    segments, info = _faster_model(model_name()).transcribe(audio)
-    return {
-        "language": info.language,
-        "segments": [
-            {"start": s.start, "end": s.end, "text": s.text,
-             "no_speech_prob": s.no_speech_prob}
-            for s in segments
-        ],
-    }  # fmt: skip
+    return _faster_with_fallback(audio)
 
 
 def is_complete(out_dir: Path) -> bool:

@@ -92,6 +92,40 @@ def doctor() -> None:
 
 
 @app.command()
+def login(
+    browser: str | None = typer.Option(
+        None, help="chrome, brave, edge, chromium, vivaldi, opera, firefox, safari"
+    ),
+    browser_path: Annotated[
+        Path | None,
+        typer.Option(
+            help="Path to the browser's program, for any other Chromium browser"
+        ),
+    ] = None,
+) -> None:
+    """Log in to Instagram in a browser window. Prism keeps the cookies in a file."""
+    from prism import doctor as doctor_mod
+    from prism import login as login_mod
+
+    typer.echo(
+        "Opening a separate browser window. Log in to Instagram there,"
+        " it closes by itself. You have 5 minutes."
+    )
+    try:
+        used, cookies = login_mod.run(browser, browser_path)
+    except login_mod.LoginError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from None
+    check = doctor_mod._cookies_file(cookies)
+    if not check.ok:
+        typer.echo(check.detail, err=True)
+        raise typer.Exit(1)
+    typer.echo(
+        f"Logged in with {used}. Cookies saved to {cookies}. Keep that file private."
+    )
+
+
+@app.command()
 def fetch(
     file: Annotated[
         Path,

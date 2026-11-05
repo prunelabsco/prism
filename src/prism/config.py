@@ -7,6 +7,7 @@ override any subset of keys; unknown keys are an error, not silently ignored.
 import os
 import tomllib
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -40,6 +41,8 @@ TEMPLATE = """\
 # chrome, brave, firefox, edge, safari, ... Run `prism doctor` to check.
 # browser = "chrome"
 # browser_profile = "Default"
+# Browser cookies blocked? `prism login` sets this for you. It wins over `browser`.
+# cookies_file = "~/.prism/instagram-cookies.txt"
 # max_per_run = 30
 
 # Sort an Instagram collection into a category. `prism collections` lists the names.
@@ -69,6 +72,8 @@ class Download(_Section):
     # explicit profile: otherwise yt-dlp picks the profile whose cookies changed
     # last, not necessarily the one logged in to Instagram
     browser_profile: str | None = None
+    # Netscape cookies.txt, wins over `browser`. For browsers that block yt-dlp
+    cookies_file: Path | None = None
 
 
 class Frames(_Section):
@@ -81,6 +86,8 @@ class Frames(_Section):
 
 class Transcribe(_Section):
     model: str | None = None  # None = the backend's default (transcribe.MODELS)
+    # faster-whisper only. auto: CUDA if usable, else CPU
+    device: Literal["auto", "cpu", "cuda"] = "auto"
 
 
 class Curate(_Section):
@@ -107,6 +114,11 @@ class Settings(_Section):
     def vault_dir(self) -> Path:
         v = self.paths.vault_dir
         return v.expanduser().resolve() if v else self.output_dir
+
+    @property
+    def cookies_file(self) -> Path | None:
+        f = self.download.cookies_file
+        return f.expanduser().resolve() if f else None
 
     @property
     def db_path(self) -> Path:
