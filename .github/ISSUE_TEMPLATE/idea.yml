@@ -1,0 +1,26 @@
+name: Idea
+description: Something Prism could do better.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This repo is public, so anyone can read what you post here.** Leave out personal details and anything from your saved reels you wouldn't share.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem did you run into?
+      description: What you were trying to do, and where Prism got in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How do you handle it now?
+      description: Your workaround, even if it's clumsy. "I don't" is a fine answer.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea, if you have one
