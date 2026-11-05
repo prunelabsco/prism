@@ -167,7 +167,7 @@ def run(
                 r.deferred += 1
             fails += 1
             if fails >= 2:
-                r.probe_stopped = str(e)
+                r.probe_stopped = download.stop_reason(e)
             continue
         fails = 0
         _insert(conn, reel_id, code, item, "queued")

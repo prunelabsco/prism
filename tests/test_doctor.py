@@ -54,3 +54,19 @@ def test_reachable(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", silent)
     c = doctor._reachable()
     assert not c.ok and "another network" in c.detail
+
+
+def test_cookie_errors_say_what_to_do(monkeypatch, tmp_path):
+    import yt_dlp.cookies
+
+    with_browser(monkeypatch, tmp_path, "brave")
+
+    def fails(msg):
+        def extract(b, p):
+            raise RuntimeError(msg)
+
+        monkeypatch.setattr(yt_dlp.cookies, "extract_cookies_from_browser", extract)
+        return doctor._cookies()
+
+    assert "Close the browser" in fails("Could not copy Chrome cookie database.").detail
+    assert "another browser" in fails("Failed to decrypt with DPAPI.").detail

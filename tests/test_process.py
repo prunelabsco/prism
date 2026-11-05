@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from prism import db, download, frames, process, transcribe
@@ -89,6 +91,29 @@ def test_timeout_is_reported_as_network_not_rate_limit(conn, tmp_path):
     err = download.IgError("Read timed out. (read timeout=20.0)", transient=True)
     r = run(conn, tmp_path, FakeFetch({"a": err, "b": err}))
     assert "network" in r.stopped and "rate limit" not in r.stopped
+
+
+def _last_requeue_error(conn):
+    row = conn.execute(
+        "SELECT payload FROM events WHERE type = 'stage_failed' ORDER BY id DESC"
+    ).fetchone()
+    return json.loads(row[0])["error"]
+
+
+def test_requeue_event_names_the_real_cause(conn, tmp_path):
+    add(conn, "a")
+    err = download.IgError("Read timed out.", transient=True)
+    run(conn, tmp_path, FakeFetch({"a": err}))
+    assert _last_requeue_error(conn) == "network"
+
+
+def test_cookie_error_stops_the_run_and_keeps_reels_queued(conn, tmp_path):
+    add(conn, "a", "b")
+    err = download.IgError("Failed to decrypt with DPAPI", transient=True)
+    r = run(conn, tmp_path, FakeFetch({"a": err, "b": err}))
+    assert "cookies" in r.stopped and "another browser" in r.stopped
+    assert statuses(conn) == {"a": "queued", "b": "queued"}
+    assert _last_requeue_error(conn) == "cookies"
 
 
 def test_stops_after_two_rate_limits(conn, tmp_path):

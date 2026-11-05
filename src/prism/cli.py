@@ -125,10 +125,15 @@ def fetch(
         f" · {r.existing} already queued · {r.duplicates} duplicates"
         f" · {r.not_instagram} not Instagram"
     )
-    if r.deferred:
-        typer.echo("Deferred posts are checked on the next `prism fetch`.")
     if r.probe_stopped:
-        typer.echo(f"Probing stopped (failed twice): {r.probe_stopped}", err=True)
+        typer.echo(
+            f"Warning: fetch is incomplete, {r.deferred} posts were not checked."
+            f" Stopped after two failures: {r.probe_stopped}\n"
+            "Fix that, then run `prism fetch` again.",
+            err=True,
+        )
+    elif r.deferred:
+        typer.echo("Deferred posts are checked on the next `prism fetch`.")
 
 
 @app.command()

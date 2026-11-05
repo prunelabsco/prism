@@ -16,8 +16,10 @@ It runs on your machine with your own AI agent (Claude Code, Codex, OpenCode, Ge
 | | What it's for | Cost |
 |---|---|---|
 | **[Your Instagram export](#get-your-instagram-export)** (ZIP) | The list of reels you saved, plus your collection names. Meta needs time to prepare it, so request it first. | Free |
-| **A browser logged in to Instagram** | `prism process` uses its cookies to download reels as you. | Free |
+| **A browser logged in to Instagram** | `prism fetch` and `prism process` use its cookies to reach Instagram as you. | Free |
 | **Python 3.12 + [uv](https://docs.astral.sh/uv/)** | Installs and runs the CLI. | Free |
+| **git** | `uv tool install` pulls Prism from GitHub with it. | Free |
+| **Node.js** | `npx skills add` installs the agent skill. You can copy the skill folder by hand instead. | Free |
 | **[ffmpeg](https://ffmpeg.org/download.html)** | Cuts frames and extracts audio (`brew install ffmpeg`, `winget install ffmpeg`, `apt install ffmpeg`). | Free |
 | **An AI coding agent that can read images** | Does the curation: looks at frames, writes the ideas. Claude Code, Codex, OpenCode, Gemini CLI, Cursor... Text-only models won't work. | Your agent's normal quota or API pricing |
 | **A network that can reach Instagram** | Downloads time out on some networks, even when instagram.com opens in your browser. `prism doctor` checks this. | - |
@@ -25,7 +27,7 @@ It runs on your machine with your own AI agent (Claude Code, Codex, OpenCode, Ge
 
 You don't need a Prism account, a server, or an API key for Prism. Transcription runs locally and installs with the CLI: [mlx-whisper](https://github.com/ml-explore/mlx-examples) on Apple Silicon, [faster-whisper](https://github.com/SYSTRAN/faster-whisper) everywhere else.
 
-**About the cookies:** you never type a password into Prism. You only name your browser in the config, and yt-dlp reads its Instagram cookies on your machine, only during `prism process`. Prism uses them to talk to Instagram and nothing else. Curation and export don't touch Instagram at all.
+**About the cookies:** you never type a password into Prism. You only name your browser in the config, and yt-dlp reads its Instagram cookies on your machine, only during `prism fetch` and `prism process`. Prism uses them to talk to Instagram and nothing else. Curation and export don't touch Instagram at all.
 
 ## Setup
 
@@ -79,6 +81,14 @@ browser = "chrome"           # chrome, brave, firefox, edge, safari, ...
 ```
 
 Run `prism doctor` again until everything says `ok`. Then write a few lines about yourself in `~/.prism/profile.md`. The agent uses it to judge what's useful **to you**.
+
+### On Windows
+
+- **`prism` not found after install:** run `uv tool update-shell`, then open a new terminal.
+- **`Could not copy Chrome cookie database` in `prism doctor`:** close the browser completely, then run it again.
+- **`Failed to decrypt with DPAPI` in `prism doctor`:** the browser is blocking access to its cookies (seen with Brave). Try another browser, such as Firefox: log in to Instagram there, set `browser` in the config, and remove `browser_profile` if it names a profile from the old browser.
+- **Certificate errors during install (`UnknownIssuer`, `unable to get local issuer certificate`):** antivirus that scans HTTPS, such as Avast, can cause these. Add `--native-tls` to the `uv tool install` command and run `git config --global http.sslBackend schannel`. Certificates are still checked.
+- **`winget` fails on the `msstore` source:** add `--source winget`.
 
 ## Get your Instagram export
 
@@ -238,7 +248,7 @@ faster-whisper on CPU-only machines transcribes slower than mlx on Apple Silicon
 
 If a user asked you to set up Prism, do this in order:
 
-1. Check `uv` and `ffmpeg`. If one is missing, ask before installing it.
+1. Check `uv`, `git` and `ffmpeg`. If one is missing, ask before installing it.
 2. Run `uv tool install git+https://github.com/prunelabsco/prism`.
 3. Run `npx skills add prunelabsco/prism`. If that fails, copy `skills/prism/` into your skills folder.
 4. Run `prism init`. Ask which browser is logged in to Instagram, set it in `~/.prism/config.toml`, then run `prism doctor` until every line says `ok`.

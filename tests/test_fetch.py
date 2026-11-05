@@ -138,7 +138,7 @@ def test_probe_stops_after_two_failures(conn):
     probe = FakeProbe({"P0": err, "P1": err, "P2": True, "P3": True})
     r = run(conn, items, probe)
     assert probe.calls == ["P0", "P1"]
-    assert (r.deferred, r.probe_stopped) == (4, "rate limit")
+    assert r.deferred == 4 and "rate limit" in r.probe_stopped
     assert rows(conn) == {}
 
     r = run(conn, items, FakeProbe({f"P{i}": True for i in range(4)}))
@@ -269,3 +269,11 @@ def test_progress_reports_total_and_each_probe(conn):
     assert lines[1].startswith("checking post 1/")
     assert "ig_B1" in lines[1]
     assert len(lines) == 2  # reels queue silently, only slow steps report
+
+
+def test_cookie_failure_never_skips_the_post(conn):
+    items = [item("c0", "https://www.instagram.com/p/P0/")]
+    err = download.IgError("Failed to decrypt with DPAPI", transient=True)
+    for _ in range(4):
+        r = run(conn, items, FakeProbe({"P0": err}))
+    assert r.unreachable == 0 and rows(conn) == {}
