@@ -63,6 +63,8 @@ uv tool install git+https://github.com/prunelabsco/prism
 npx skills add prunelabsco/prism
 ```
 
+Some agents, including Claude Code, aren't selected by default. In the list, search for yours, press Space to select it, then choose **Global**.
+
 The second command copies the `prism` skill into your agent's skills folder. Prefer manual? Copy `skills/prism/` into `~/.claude/skills/` (Claude Code), `~/.agents/skills/` (Codex), or wherever your agent loads [Agent Skills](https://agentskills.io) from.
 
 **3. Initialize and check:**
@@ -292,7 +294,7 @@ If a user asked you to set up Prism, do this in order:
 
 1. Check `uv`, `git` and `ffmpeg`. If one is missing, ask before installing it.
 2. Run `uv tool install git+https://github.com/prunelabsco/prism`.
-3. Run `npx skills add prunelabsco/prism`. If that fails, copy `skills/prism/` into your skills folder.
+3. Run `npx skills add prunelabsco/prism`. Some agents, including Claude Code, aren't selected by default: tell the user to search for theirs and select it with Space, then choose Global. If that fails, copy `skills/prism/` into your skills folder.
 4. Run `prism init`. Ask which browser is logged in to Instagram, set it in `~/.prism/config.toml`, then run `prism doctor` until every line says `ok`.
 5. Ask 2-3 short questions about the user and write `~/.prism/profile.md`.
 6. Ask for the export ZIP. If they don't have it, send them to [Get your Instagram export](#get-your-instagram-export) and stop here.

@@ -75,6 +75,23 @@ def test_mixed_carousel_picks_first_video(ydl, tmp_path):
     assert download.is_complete(tmp_path / "r")
 
 
+def test_photo_slide_prefers_the_full_image_over_a_square_crop(
+    ydl, tmp_path, monkeypatch
+):
+    crop = {"url": "crop", "width": 1080, "height": 1080}
+    full = {"url": "full", "width": 1080, "height": 1440}
+    ydl.carousel = [{"thumbnails": [crop, full]}, {"thumbnails": [full, crop]}]
+    urls = []
+
+    def fake_ffmpeg(cmd, **kw):
+        urls.append(cmd[cmd.index("-i") + 1])
+        Path(cmd[-1]).write_bytes(b"jpg")
+
+    monkeypatch.setattr(download.subprocess, "run", fake_ffmpeg)
+    download.fetch_video(URL, tmp_path / "r")
+    assert urls == ["full", "full"]
+
+
 def test_photo_carousel_slides_become_frames(ydl, tmp_path, monkeypatch):
     small = {"url": "s", "width": 150}
     ydl.carousel = [

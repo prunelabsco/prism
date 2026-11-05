@@ -176,7 +176,8 @@ def _fetch_photos(info: dict, out_dir: Path) -> None:
         thumbs = [t for t in (entry or {}).get("thumbnails") or [] if t.get("url")]
         if not thumbs:
             continue
-        best = max(thumbs, key=lambda t: t.get("width") or 0)
+        # height breaks ties: Instagram also lists a square crop at full width
+        best = max(thumbs, key=lambda t: (t.get("width") or 0, t.get("height") or 0))
         rel = f"frames/{i:04d}.jpg"
         # ponytail: ffmpeg reads the CDN URL directly, no extra HTTP client
         try:
