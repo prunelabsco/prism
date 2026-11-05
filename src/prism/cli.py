@@ -298,6 +298,21 @@ def category_reject(slug: str) -> None:
 
 
 @app.command()
+def collections() -> None:
+    """Instagram collections in the queue and the category each one maps to."""
+    from prism import curation
+
+    rows, loose = curation.collections(_open())
+    for c in rows:
+        target = c["slug"] or "-"
+        if c["slug"] and not c["active"]:
+            target += " (not an active category)"
+        typer.echo(f"  {c['reels']:>4}  {c['name']}  ->  {target}")
+    typer.echo(f"  {loose:>4}  (no collection)")
+    typer.echo(f"Mappings live in [collections] in {config.CONFIG_FILE}")
+
+
+@app.command()
 def recategorize(
     idea_id: int | None = typer.Argument(None, help="An uncategorized idea"),
     slug: str | None = typer.Argument(None, help="Target core/approved category"),

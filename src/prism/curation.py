@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -49,6 +50,9 @@ def next_packet(conn: sqlite3.Connection, reels_dir: Path | None = None) -> Path
         data = json.loads(path.read_text(encoding="utf-8"))
         data["recent_titles"] = packet.recent_titles(conn, row["id"])
         data["categories"] = packet.categories(conn)
+        data["collection_categories"] = packet.collection_categories(
+            conn, data.get("collections", [])
+        )
         path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -225,6 +229,28 @@ def add(
             (slug, name, description or name),
         )
         db.log_event(conn, "category_added", slug=slug, name=name)
+
+
+def collections(conn: sqlite3.Connection) -> tuple[list[dict], int]:
+    """Every collection in the queue with its reel count and mapping, most used first.
+
+    Second value: reels in no collection.
+    """
+    counts: Counter[str] = Counter()
+    loose = 0
+    for row in conn.execute("SELECT source_tags FROM reels"):
+        tags = json.loads(row["source_tags"] or "[]")
+        counts.update(tags)
+        loose += not tags
+    return [
+        {
+            "name": name,
+            "reels": n,
+            "slug": config.settings.collections.get(name),
+            "active": bool(packet.collection_categories(conn, [name])),
+        }
+        for name, n in counts.most_common()
+    ], loose
 
 
 def uncategorized(conn: sqlite3.Connection) -> list[sqlite3.Row]:

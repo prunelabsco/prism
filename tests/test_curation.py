@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from prism import curation, db
+from prism import config, curation, db
 
 
 @pytest.fixture
@@ -320,3 +320,37 @@ def test_add_refuses_existing_but_revives_rejected(conn):
         "SELECT name, status FROM categories WHERE slug = 'design'"
     ).fetchone()
     assert tuple(row) == ("Design 2", "approved")
+
+
+def _mapped(monkeypatch, mapping):
+    monkeypatch.setattr(
+        config, "settings", config.settings.model_copy(update={"collections": mapping})
+    )
+
+
+def test_next_applies_mapping_made_after_process(conn, tmp_path, monkeypatch):
+    _mapped(monkeypatch, {"makan": "recipes", "resto": "places", "off": "nope"})
+    add(conn, "ig_A", "ready")
+    d = tmp_path / "ig_A"
+    d.mkdir()
+    (d / "packet.json").write_text(
+        json.dumps({"reel_id": "ig_A", "collections": ["makan", "off", "resto", "x"]})
+    )
+    data = json.loads(curation.next_packet(conn, tmp_path).read_text())
+    assert data["collection_categories"] == ["recipes", "places"]
+
+
+def test_collections_overview(conn, monkeypatch):
+    _mapped(monkeypatch, {"makan": "recipes", "off": "nope"})
+    for i, tags in enumerate((["makan"], ["makan", "off"], None)):
+        conn.execute(
+            "INSERT INTO reels (id, source, source_id, url, status, source_tags)"
+            " VALUES (?, 'ig_export', ?, 'u', 'queued', ?)",
+            (f"r{i}", f"r{i}", json.dumps(tags) if tags else None),
+        )
+    rows, loose = curation.collections(conn)
+    assert loose == 1
+    assert rows == [
+        {"name": "makan", "reels": 2, "slug": "recipes", "active": True},
+        {"name": "off", "reels": 1, "slug": "nope", "active": False},
+    ]

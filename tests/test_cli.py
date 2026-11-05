@@ -194,3 +194,18 @@ def test_category_add(settings):
     assert "Home Decor" in runner.invoke(app, ["category", "list"]).output
     assert runner.invoke(app, ["category", "add", "home-decor"]).exit_code == 1
     assert runner.invoke(app, ["category", "add", "Bad Slug"]).exit_code == 1
+
+
+def test_collections_lists_mapping(settings, monkeypatch):
+    conn = _seed_reels(settings, [("a", "queued", 0)])
+    with conn:
+        conn.execute('UPDATE reels SET source_tags = \'["makan", "d1"]\'')
+    monkeypatch.setattr(
+        config,
+        "settings",
+        settings.model_copy(update={"collections": {"makan": "recipes", "d1": "nope"}}),
+    )
+    out = runner.invoke(app, ["collections"]).output
+    assert "makan  ->  recipes\n" in out
+    assert "d1  ->  nope (not an active category)" in out
+    assert "0  (no collection)" in out

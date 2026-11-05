@@ -4,6 +4,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+from prism import config
+
 RECENT_LIMIT = 30
 
 
@@ -32,6 +34,20 @@ def categories(conn: sqlite3.Connection) -> list[dict]:
     return [dict(c) for c in rows]
 
 
+def collection_categories(
+    conn: sqlite3.Connection, collections: list[str]
+) -> list[str]:
+    """Active categories the user mapped this reel's collections to."""
+    active = {
+        row["slug"]
+        for row in conn.execute(
+            "SELECT slug FROM categories WHERE status IN ('core', 'approved')"
+        )
+    }
+    mapped = (config.settings.collections.get(c) for c in collections)
+    return list(dict.fromkeys(slug for slug in mapped if slug in active))
+
+
 def build(conn: sqlite3.Connection, reel_id: str, out_dir: Path) -> dict:
     """Merge reel row + meta/frames/transcript + categories, write packet.json."""
     reel = conn.execute(
@@ -42,6 +58,7 @@ def build(conn: sqlite3.Connection, reel_id: str, out_dir: Path) -> dict:
         raise ValueError(f"reel {reel_id} does not exist")
     meta = _read(out_dir, "meta.json")
     transcript = _read(out_dir, "transcript.json")
+    collections = json.loads(reel["source_tags"] or "[]")
 
     packet = {
         "reel_id": reel["id"],
@@ -50,7 +67,9 @@ def build(conn: sqlite3.Connection, reel_id: str, out_dir: Path) -> dict:
         "title": reel["title"],
         "user_note": reel["user_note"],
         # Instagram collection names = the user's own topic hint
-        "collections": json.loads(reel["source_tags"] or "[]"),
+        "collections": collections,
+        # the user's own sorting, see `[collections]` in config.toml
+        "collection_categories": collection_categories(conn, collections),
         "media": meta.get("media", "video"),  # photo: frame = slide, at_s null
         "caption": meta.get("caption"),
         "duration_s": meta["duration_s"],

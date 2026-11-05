@@ -41,6 +41,11 @@ TEMPLATE = """\
 # browser = "chrome"
 # browser_profile = "Default"
 # max_per_run = 30
+
+# Sort an Instagram collection into a category. `prism collections` lists the names.
+# Collections left out here stay a topic hint only.
+# [collections]
+# "my food" = "recipes"
 """
 
 
@@ -88,6 +93,7 @@ class Settings(_Section):
     frames: Frames = Frames()
     transcribe: Transcribe = Transcribe()
     curate: Curate = Curate()
+    collections: dict[str, str] = {}  # Instagram collection name -> category slug
 
     @property
     def data_dir(self) -> Path:

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from prism import db, packet
+from prism import config, db, packet
 
 
 @pytest.fixture
@@ -108,3 +108,30 @@ def test_missing_file_raises(conn, reel):
     (reel / "transcript.json").unlink()
     with pytest.raises(OSError):
         packet.build(conn, "ig_A", reel)
+
+
+def test_collection_categories_only_active_mappings(conn, reel, monkeypatch):
+    monkeypatch.setattr(
+        config,
+        "settings",
+        config.settings.model_copy(
+            update={
+                "collections": {
+                    "makan": "recipes",
+                    "mamm🍴": "recipes",
+                    "maybe": "pending",
+                    "gone": "does-not-exist",
+                }
+            }
+        ),
+    )
+    with conn:
+        conn.execute(
+            "INSERT INTO categories (slug, name, description, status)"
+            " VALUES ('pending', 'P', 'p', 'proposed')"
+        )
+        conn.execute(
+            "UPDATE reels SET source_tags = ? WHERE id = 'ig_A'",
+            (json.dumps(["makan", "mamm🍴", "maybe", "gone", "unmapped"]),),
+        )
+    assert packet.build(conn, "ig_A", reel)["collection_categories"] == ["recipes"]
