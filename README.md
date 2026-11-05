@@ -86,9 +86,26 @@ Run `prism doctor` again until everything says `ok`. Then write a few lines abou
 
 - **`prism` not found after install:** run `uv tool update-shell`, then open a new terminal.
 - **`Could not copy Chrome cookie database` in `prism doctor`:** close the browser completely, then run it again.
-- **`Failed to decrypt with DPAPI` in `prism doctor`:** the browser is blocking access to its cookies (seen with Brave). Try another browser, such as Firefox: log in to Instagram there, set `browser` in the config, and remove `browser_profile` if it names a profile from the old browser.
+- **`Failed to decrypt with DPAPI` in `prism doctor`:** the browser is blocking access to its cookies (seen with Brave). [Use a cookies file](#use-a-cookies-file), or try another browser, such as Firefox: log in to Instagram there, set `browser` in the config, and remove `browser_profile` if it names a profile from the old browser.
 - **Certificate errors during install (`UnknownIssuer`, `unable to get local issuer certificate`):** antivirus that scans HTTPS, such as Avast, can cause these. Add `--native-tls` to the `uv tool install` command and run `git config --global http.sslBackend schannel`. Certificates are still checked.
 - **`winget` fails on the `msstore` source:** add `--source winget`.
+
+### Use a cookies file
+
+For when Prism can't read your browser's cookies. You keep using your browser, and export its Instagram cookies once:
+
+1. Install an extension that exports `cookies.txt` on your machine, such as [Get cookies.txt LOCALLY](https://github.com/kairi003/Get-cookies.txt-LOCALLY).
+2. Open instagram.com, logged in, and export the cookies **for that site only** in Netscape format. Save them as `~/.prism/instagram-cookies.txt`.
+3. Remove the extension. It can read your cookies while it's installed.
+4. Add this under `[download]` in `~/.prism/config.toml`. It wins over `browser`:
+
+   ```toml
+   cookies_file = "~/.prism/instagram-cookies.txt"
+   ```
+
+5. Run `prism doctor`.
+
+**That file is your Instagram login.** Anyone who has it can use your account, so never share it or put it in a repo. yt-dlp rewrites it after each run, which is normal. If `prism doctor` says the session is gone, export it again.
 
 ## Get your Instagram export
 
@@ -259,7 +276,7 @@ If a user asked you to set up Prism, do this in order:
 Rules:
 
 - If you can't read images, say so and stop. Curation depends on the frames.
-- Never ask for the user's Instagram password. Never read or print cookies.
+- Never ask for the user's Instagram password. Never read or print cookies, and never open, copy or move a `cookies_file`. The user exports it themselves.
 - Never run `prism process` in a loop or in parallel. If it stops, tell the user.
 - `prism fetch` and `prism process` can run for minutes. Don't interrupt them because they look slow.
 - Never approve, reject or add categories, or write collection mappings, without the user's confirmation. That's the user's call.
